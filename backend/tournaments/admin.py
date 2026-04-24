@@ -1,26 +1,40 @@
 from django.contrib import admin
 from .models import (
-    EventSchedule, EventParticipant,
+    EventSchedule, Athlete, EventRegistration, RosterEntry,
     MatchResult, MatchSetScore,
     PodiumResult, MedalRecord, MedalTally,
 )
 
 
-class EventParticipantInline(admin.TabularInline):
-    model = EventParticipant
+class EventRegistrationInline(admin.TabularInline):
+    model = EventRegistration
     extra = 1
 
+class RosterEntryInline(admin.TabularInline):
+    model = RosterEntry
+    extra = 1
 
 class MatchSetScoreInline(admin.TabularInline):
     model = MatchSetScore
     extra = 0
 
-
 @admin.register(EventSchedule)
 class EventScheduleAdmin(admin.ModelAdmin):
     list_display = ['event', 'venue', 'scheduled_start', 'scheduled_end']
     list_filter = ['event__category', 'venue']
-    inlines = [EventParticipantInline]
+    inlines = [EventRegistrationInline]
+
+@admin.register(Athlete)
+class AthleteAdmin(admin.ModelAdmin):
+    list_display = ['student_number', 'full_name', 'department', 'program_course', 'year_level', 'is_enrolled', 'medical_cleared']
+    list_filter = ['department', 'is_enrolled', 'medical_cleared']
+    search_fields = ['full_name', 'student_number']
+
+@admin.register(EventRegistration)
+class EventRegistrationAdmin(admin.ModelAdmin):
+    list_display = ['schedule', 'department', 'status', 'submitted_by', 'created_at']
+    list_filter = ['status', 'department', 'schedule__event']
+    inlines = [RosterEntryInline]
 
 
 @admin.register(MatchResult)
