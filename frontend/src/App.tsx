@@ -13,6 +13,7 @@ import Results from './pages/Public/Results';
 // Auth & Admin
 import Login from './pages/Auth/Login';
 import Dashboard from './pages/Admin/Dashboard';
+import Masterlist from './pages/Admin/Masterlist';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 const queryClient = new QueryClient();
@@ -33,6 +34,7 @@ export default function App() {
                             {/* Protected Admin Shell */}
                             <Route element={<ProtectedRoute allowedRoles={['admin', 'department_rep']} />}>
                                 <Route path="/admin" element={<Dashboard />} />
+                                <Route path="/admin/masterlist" element={<Masterlist />} />
                             </Route>
                         </Route>
                     </Routes>
