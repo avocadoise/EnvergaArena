@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import (
-    EventSchedule, EventParticipant,
+    EventSchedule, Athlete, EventRegistration, RosterEntry,
     MatchResult, MatchSetScore,
     PodiumResult, MedalRecord, MedalTally,
 )
@@ -11,17 +11,33 @@ from core.models import Department
 # Schedule / participants
 # ---------------------------------------------------------------------------
 
-class EventParticipantSerializer(serializers.ModelSerializer):
-    department_name = serializers.CharField(source='department.name', read_only=True)
-    department_acronym = serializers.CharField(source='department.acronym', read_only=True)
+class AthleteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Athlete
+        fields = '__all__'
+
+class RosterEntrySerializer(serializers.ModelSerializer):
+    athlete_name = serializers.CharField(source='athlete.full_name', read_only=True)
+    student_number = serializers.CharField(source='athlete.student_number', read_only=True)
 
     class Meta:
-        model = EventParticipant
-        fields = ['id', 'department', 'department_name', 'department_acronym']
+        model = RosterEntry
+        fields = ['id', 'athlete', 'athlete_name', 'student_number', 'is_eligible']
 
+class EventRegistrationSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    department_acronym = serializers.CharField(source='department.acronym', read_only=True)
+    roster = RosterEntrySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = EventRegistration
+        fields = [
+            'id', 'schedule', 'department', 'department_name', 'department_acronym',
+            'status', 'admin_notes', 'submitted_by', 'roster', 'created_at', 'updated_at'
+        ]
 
 class EventScheduleSerializer(serializers.ModelSerializer):
-    participants = EventParticipantSerializer(many=True, read_only=True)
+    registrations = EventRegistrationSerializer(many=True, read_only=True)
     event_name = serializers.CharField(source='event.name', read_only=True)
     result_family = serializers.CharField(source='event.result_family', read_only=True)
     venue_name = serializers.CharField(source='venue.name', read_only=True)
@@ -33,7 +49,7 @@ class EventScheduleSerializer(serializers.ModelSerializer):
             'id', 'event', 'event_name', 'result_family',
             'venue', 'venue_name', 'venue_area', 'venue_area_name',
             'scheduled_start', 'scheduled_end', 'notes',
-            'participants',
+            'registrations',
             'created_at', 'updated_at',
         ]
 
