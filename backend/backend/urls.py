@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from core.views import DepartmentViewSet, VenueViewSet, VenueAreaViewSet
 from events.views import EventCategoryViewSet, EventViewSet
 from tournaments.views import (
-    EventScheduleViewSet, MatchResultViewSet,
+    EventScheduleViewSet, MatchResultViewSet, AthleteViewSet, EventRegistrationViewSet,
     PodiumResultViewSet, MedalRecordViewSet, MedalTallyViewSet,
 )
 
@@ -20,6 +20,8 @@ router.register(r'events', EventViewSet)
 router.register(r'event-categories', EventCategoryViewSet)
 
 # Tournaments
+router.register(r'athletes', AthleteViewSet, basename='athlete')
+router.register(r'registrations', EventRegistrationViewSet, basename='eventregistration')
 router.register(r'schedules', EventScheduleViewSet)
 router.register(r'match-results', MatchResultViewSet)
 router.register(r'podium-results', PodiumResultViewSet)
