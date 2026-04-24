@@ -18,17 +18,58 @@ class EventSchedule(models.Model):
         return f"{self.event.name} @ {self.venue} ({self.scheduled_start})"
 
 
-class EventParticipant(models.Model):
-    """Department registered to compete in a specific EventSchedule."""
-    schedule = models.ForeignKey(EventSchedule, on_delete=models.CASCADE, related_name='participants')
-    department = models.ForeignKey(Department, on_delete=models.CASCADE)
+class Athlete(models.Model):
+    """Student athlete master record for a department."""
+    student_number = models.CharField(max_length=50, unique=True)
+    full_name = models.CharField(max_length=255)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='athletes')
+    program_course = models.CharField(max_length=100)
+    year_level = models.CharField(max_length=20)
+    is_enrolled = models.BooleanField(default=True)
+    medical_cleared = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.full_name} ({self.student_number})"
+
+
+class EventRegistration(models.Model):
+    """A department's submission to compete in a specific EventSchedule."""
+    STATUS_CHOICES = [
+        ('submitted', 'Submitted'),
+        ('pending', 'Pending Review'),
+        ('needs_revision', 'Needs Revision'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    schedule = models.ForeignKey(EventSchedule, on_delete=models.CASCADE, related_name='registrations')
+    department = models.ForeignKey(Department, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='submitted')
+    admin_notes = models.TextField(blank=True)
+    submitted_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = ('schedule', 'department')
 
     def __str__(self):
-        return f"{self.department.acronym} in {self.schedule}"
+        return f"{self.department.acronym} - {self.schedule.event.name} ({self.status})"
+
+
+class RosterEntry(models.Model):
+    """An athlete tied to a specific EventRegistration."""
+    registration = models.ForeignKey(EventRegistration, on_delete=models.CASCADE, related_name='roster')
+    athlete = models.ForeignKey(Athlete, on_delete=models.CASCADE)
+    is_eligible = models.BooleanField(default=True)
+    
+    class Meta:
+        unique_together = ('registration', 'athlete')
+
+    def __str__(self):
+        return f"{self.athlete.full_name} in {self.registration}"
 
 
 # ---------------------------------------------------------------------------
