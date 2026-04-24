@@ -26,7 +26,12 @@ router.register(r'podium-results', PodiumResultViewSet)
 router.register(r'medal-records', MedalRecordViewSet)
 router.register(r'medal-tally', MedalTallyViewSet)
 
+from rest_framework_simplejwt.views import TokenRefreshView
+from core.serializers import CustomTokenObtainPairView
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/public/', include(router.urls)),
 ]
