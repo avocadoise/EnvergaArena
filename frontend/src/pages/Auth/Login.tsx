@@ -1,0 +1,95 @@
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { setTokens } from '../../services/auth';
+import { API_URL } from '../../services/api';
+import axios from 'axios';
+import { LogIn } from 'lucide-react';
+
+export default function Login() {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    
+    const { loginState } = useAuth();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const from = location.state?.from?.pathname || '/admin';
+
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            const res = await axios.post(`${API_URL}/auth/login/`, {
+                username,
+                password,
+            });
+            const { access, refresh } = res.data;
+            setTokens(access, refresh);
+            loginState(access);
+            navigate(from, { replace: true });
+        } catch (err: any) {
+            setError(err.response?.data?.detail || 'Invalid credentials');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="flex justify-center items-center py-20">
+            <div className="card w-96 bg-base-100 shadow-2xl border-t-4 border-maroon">
+                <div className="card-body">
+                    <h2 className="card-title justify-center text-2xl text-maroon font-bold mb-4">
+                        <LogIn className="w-6 h-6 mr-2"/> Login
+                    </h2>
+                    
+                    {error && (
+                        <div className="alert alert-error text-sm p-3 rounded-md mb-4">
+                            <span>{error}</span>
+                        </div>
+                    )}
+                    
+                    <form onSubmit={handleLogin}>
+                        <div className="form-control w-full">
+                            <label className="label">
+                                <span className="label-text font-semibold">Username</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                className="input input-bordered w-full focus:outline-maroon" 
+                                value={username}
+                                onChange={(e) => setUsername(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="form-control w-full mt-4">
+                            <label className="label">
+                                <span className="label-text font-semibold">Password</span>
+                            </label>
+                            <input 
+                                type="password" 
+                                className="input input-bordered w-full focus:outline-maroon" 
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="form-control mt-8">
+                            <button 
+                                type="submit" 
+                                className="btn btn-primary bg-maroon hover:bg-maroon-dark border-none text-white w-full"
+                                disabled={loading}
+                            >
+                                {loading ? <span className="loading loading-spinner"></span> : 'Sign In'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    );
+}
