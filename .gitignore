@@ -1,0 +1,8 @@
+.agents
+.venv
+node_modules
+.env
+skills-lock.json
+__pycache__
+*.pdf
+antigravity_enverga_arena_context_prompt.md
