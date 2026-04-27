@@ -10,13 +10,14 @@ Official Intramurals Registration, Results, and Medal Tally System for Manuel S.
   - **Admin**: Manage events, schedules, venues, approve registrations, verify results, and monitor AI logs.
   - **Department Rep**: Manage athlete masterlists, submit event registrations, and track approval status.
 - **Dynamic Event Modeling**: Supports both `match_based` (e.g., Basketball, Esports) and `rank_based` (e.g., Swimming, Dancesport) result families.
+- **Medal-Priority Ranking**: Departments rank by gold medals first, then silver, then bronze; points use the configurable demo default of Gold=5, Silver=3, Bronze=1.
 - **Immutable Audit Trail**: Medal records are ledger-based to prevent silent overwrites.
 
 ## Tech Stack
 
 - **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, DaisyUI, React Query, React Router
 - **Backend**: Django 6, Django REST Framework, SQLite (dev) / PostgreSQL (prod)
-- **AI**: Google GenAI SDK (`gemini-flash-latest`)
+- **AI**: Google GenAI SDK (`gemini-2.5-flash-lite`)
 
 ---
 
@@ -51,6 +52,23 @@ Official Intramurals Registration, Results, and Medal Tally System for Manuel S.
    ```bash
    python manage.py seed_data
    ```
+   Demo logins created by the seed:
+   - Admin / Sports Coordinator: `admin` / `demo1234`
+   - Department reps: `cafa_rep`, `cas_rep`, `cba_rep`, `ccms_rep`, `ccjc_rep`, `ced_rep`, `ceng_rep`, `cihtm_rep`, `cme_rep`, `cnahs_rep`
+   - All department rep passwords: `demo1234`
+   - Public viewer: no account required
+   - Student-athletes: no direct login in v1; they are participant records managed by department reps or admins.
+
+   Registration demo flow:
+   1. Log in as a department rep, for example `ced_rep` / `demo1234`.
+   2. Open the dashboard, choose an event, select eligible athletes from that department, and submit the registration.
+   3. Log in as `admin` / `demo1234` to approve, reject, or request revision.
+   4. Log back in as the department rep to show the updated registration status.
+
+   Seeded event coverage:
+   - Confirmed v1 competition scope: Basketball, Volleyball, Badminton, Table Tennis, Tennis, Pickleball, Swimming, Dancesport, and title-configurable E-Sports.
+   - Configurable future options: Athletics track/field, Taekwondo Kyorugi, Taekwondo Poomsae/Karatedo, Solo Voice, Oratorical, Pageant, Hip-Hop/Street Dance, and Chess.
+   - Future options are seeded as postponed/TBA instead of active medal events until OSCR confirms venues, divisions, and championship inclusion.
 6. Create a superuser account (for Admin access):
    ```bash
    python manage.py createsuperuser
