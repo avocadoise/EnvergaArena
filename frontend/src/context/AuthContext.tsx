@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { getAccessToken, clearTokens } from '../services/auth';
@@ -10,7 +11,9 @@ export interface DecodedUser {
     username: string;
     role: UserRole;
     department_id: number | null;
+    department_name: string | null;
     department_acronym: string | null;
+    exp?: number;
 }
 
 interface AuthContextType {
@@ -23,36 +26,27 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const [user, setUser] = useState<DecodedUser | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+const getStoredUser = () => {
+    const token = getAccessToken();
+    if (!token) return null;
 
-    useEffect(() => {
-        // On mount, check if token exists and load user
-        const token = getAccessToken();
-        if (token) {
-            try {
-                const decoded = jwtDecode<DecodedUser>(token);
-                // Check if expired
-                const exp = (decoded as any).exp;
-                if (exp && exp * 1000 < Date.now()) {
-                    // Expired - wait for interceptor to refresh, or just clear
-                    // Let's rely on api interceptor for refresh, but for initial state:
-                    // we'll optimistically load it. If an API call fails, interceptor clears tokens.
-                }
-                setUser(decoded);
-            } catch (e) {
-                clearTokens();
-            }
-        }
-        setIsLoading(false);
-    }, []);
+    try {
+        return jwtDecode<DecodedUser>(token);
+    } catch {
+        clearTokens();
+        return null;
+    }
+};
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+    const [user, setUser] = useState<DecodedUser | null>(() => getStoredUser());
+    const [isLoading] = useState(false);
 
     const loginState = (access: string) => {
         try {
             const decoded = jwtDecode<DecodedUser>(access);
             setUser(decoded);
-        } catch (e) {
+        } catch {
             console.error("Invalid token format");
         }
     };
