@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { setTokens } from '../../services/auth';
 import { API_URL } from '../../services/api';
 import axios from 'axios';
+import type { AxiosError } from 'axios';
 import { LogIn } from 'lucide-react';
 
 export default function Login() {
@@ -32,8 +33,9 @@ export default function Login() {
             setTokens(access, refresh);
             loginState(access);
             navigate(from, { replace: true });
-        } catch (err: any) {
-            setError(err.response?.data?.detail || 'Invalid credentials');
+        } catch (err: unknown) {
+            const loginError = err as AxiosError<{ detail?: string }>;
+            setError(loginError.response?.data?.detail || 'Invalid credentials');
         } finally {
             setLoading(false);
         }
