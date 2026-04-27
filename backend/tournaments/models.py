@@ -193,7 +193,7 @@ class MedalTally(models.Model):
     """
     Aggregated standing per department for display. Recomputed via signal/service
     whenever a MedalRecord is created or deleted. Not a source of truth — derived data.
-    Sort order: gold DESC, silver DESC, bronze DESC, total_points DESC.
+    Sort order: gold DESC, silver DESC, bronze DESC.
     """
     department = models.OneToOneField(Department, on_delete=models.CASCADE, related_name='medal_tally')
     gold = models.IntegerField(default=0)
@@ -203,7 +203,7 @@ class MedalTally(models.Model):
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['-gold', '-silver', '-bronze', '-total_points']
+        ordering = ['-gold', '-silver', '-bronze', 'department__name']
         verbose_name_plural = 'Medal Tallies'
 
     def __str__(self):
