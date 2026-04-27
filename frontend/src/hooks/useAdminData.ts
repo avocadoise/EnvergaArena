@@ -27,11 +27,20 @@ export interface EventRegistration {
     department: number;
     department_name?: string;
     department_acronym?: string;
+    schedule_event_name?: string;
+    schedule_start?: string | null;
+    venue_name?: string | null;
     status: 'submitted' | 'pending' | 'needs_revision' | 'approved' | 'rejected';
     admin_notes?: string;
     roster: RosterEntry[];
     created_at?: string;
     updated_at?: string;
+}
+
+export interface CreateRegistrationPayload {
+    schedule: number;
+    department: number;
+    roster_athlete_ids: number[];
 }
 
 // Hooks
@@ -64,6 +73,20 @@ export const useRegistrations = () => {
         queryFn: async () => {
             const { data } = await api.get('/public/registrations/');
             return data;
+        },
+    });
+};
+
+export const useCreateRegistration = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (registration: CreateRegistrationPayload) => {
+            const { data } = await api.post('/public/registrations/', registration);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['registrations'] });
+            queryClient.invalidateQueries({ queryKey: ['schedules'] });
         },
     });
 };
