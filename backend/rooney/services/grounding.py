@@ -18,18 +18,25 @@ def build_grounding_context() -> dict:
     today = timezone.localdate()
 
     # 1. Medal Tally (top 8)
-    tally = (
-        MedalTally.objects
-        .select_related('department')
-        .order_by('-gold', '-silver', '-bronze', '-total_points')[:8]
-    )
+    tally = sorted(
+        MedalTally.objects.select_related('department'),
+        key=lambda row: (
+            -row.gold,
+            -row.silver,
+            -row.bronze,
+            -(row.gold + row.silver + row.bronze),
+            row.department.name,
+        )
+    )[:8]
     if tally:
-        source_labels.append('Medal Tally')
-        lines.append("=== CURRENT MEDAL TALLY (Gold > Silver > Bronze) ===")
+        source_labels.append('official_medal_tally')
+        lines.append("=== CURRENT MEDAL TALLY (Rank: Gold, then Silver, then Bronze) ===")
         for rank, row in enumerate(tally, 1):
+            total_medals = row.gold + row.silver + row.bronze
             lines.append(
                 f"  #{rank}. {row.department.name} ({row.department.acronym}): "
-                f"G{row.gold} S{row.silver} B{row.bronze} | {row.total_points} pts"
+                f"G{row.gold} S{row.silver} B{row.bronze} | "
+                f"{total_medals} medals | {row.total_points} pts"
             )
 
     # 2. Today's schedules
