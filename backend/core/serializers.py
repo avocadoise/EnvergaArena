@@ -32,10 +32,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             profile = user.profile
             token['role'] = profile.role
             token['department_id'] = profile.department_id if profile.department else None
+            token['department_name'] = profile.department.name if profile.department else None
             token['department_acronym'] = profile.department.acronym if profile.department else None
         except UserProfile.DoesNotExist:
             token['role'] = 'admin' if user.is_staff or user.is_superuser else 'none'
             token['department_id'] = None
+            token['department_name'] = None
             token['department_acronym'] = None
 
         return token
