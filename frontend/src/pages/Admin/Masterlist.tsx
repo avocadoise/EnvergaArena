@@ -40,7 +40,10 @@ export default function Masterlist() {
                     <h1 className="text-3xl font-bold text-charcoal flex items-center gap-2">
                         <Users className="w-8 h-8 text-maroon" /> Athlete Masterlist
                     </h1>
-                    <p className="text-gray-500">Manage {user?.department_acronym} student athletes</p>
+                    <p className="text-gray-600">
+                        Manage {user?.department_name || 'department'} student athletes
+                        {user?.department_acronym && ` (${user.department_acronym})`}
+                    </p>
                 </div>
                 <button 
                     onClick={() => setIsFormOpen(!isFormOpen)}
@@ -120,7 +123,7 @@ export default function Masterlist() {
             ) : (
                 <div className="overflow-x-auto bg-base-100 rounded-xl border border-base-200">
                     <table className="table table-zebra w-full">
-                        <thead className="bg-gray-100 text-gray-700">
+                        <thead className="bg-base-200 text-charcoal">
                             <tr>
                                 <th>Student ID</th>
                                 <th>Name</th>
@@ -135,12 +138,12 @@ export default function Masterlist() {
                                     <td className="font-mono text-xs">{a.student_number}</td>
                                     <td className="font-bold">{a.full_name}</td>
                                     <td>{a.program_course} - {a.year_level}</td>
-                                    <td>{a.is_enrolled ? <CheckCircle className="text-green-500 w-5 h-5"/> : <XCircle className="text-red-500 w-5 h-5"/>}</td>
-                                    <td>{a.medical_cleared ? <CheckCircle className="text-green-500 w-5 h-5"/> : <XCircle className="text-red-500 w-5 h-5"/>}</td>
+                                    <td>{a.is_enrolled ? <CheckCircle className="text-success w-5 h-5"/> : <XCircle className="text-error w-5 h-5"/>}</td>
+                                    <td>{a.medical_cleared ? <CheckCircle className="text-success w-5 h-5"/> : <XCircle className="text-error w-5 h-5"/>}</td>
                                 </tr>
                             ))}
                             {athletes?.length === 0 && (
-                                <tr><td colSpan={5} className="text-center py-8 text-gray-500">No athletes recorded yet. Add one above.</td></tr>
+                                <tr><td colSpan={5} className="text-center py-8 text-gray-600">No athletes recorded yet. Add one above.</td></tr>
                             )}
                         </tbody>
                     </table>
