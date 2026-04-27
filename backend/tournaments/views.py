@@ -16,6 +16,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import transaction
+from django.db.models import F
 
 from .models import (
     EventSchedule, Athlete, EventRegistration, RosterEntry,
@@ -46,7 +47,7 @@ class IsAdminOrReadOnly(permissions.BasePermission):
 class EventScheduleViewSet(viewsets.ModelViewSet):
     queryset = EventSchedule.objects.select_related(
         'event', 'venue', 'venue_area'
-    ).prefetch_related('registrations__department', 'registrations__roster__athlete').all()
+    ).prefetch_related('registrations__department').all()
     serializer_class = EventScheduleSerializer
     permission_classes = [IsAdminOrReadOnly]
 
@@ -181,3 +182,11 @@ class MedalTallyViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MedalTally.objects.select_related('department').all()
     serializer_class = MedalTallySerializer
     permission_classes = [permissions.AllowAny]
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .annotate(total_medals=F('gold') + F('silver') + F('bronze'))
+            .order_by('-gold', '-silver', '-bronze', '-total_medals', 'department__name')
+        )
