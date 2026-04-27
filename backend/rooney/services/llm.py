@@ -52,7 +52,7 @@ def query_rooney(question: str, context: str) -> dict:
 
     try:
         response = client.models.generate_content(
-            model="gemini-flash-latest",
+            model="gemini-2.5-flash-lite",
             contents=full_prompt,
             config=types.GenerateContentConfig(
                 temperature=0.1,
