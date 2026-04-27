@@ -30,7 +30,7 @@ export default function Schedules() {
             {!schedules || schedules.length === 0 ? (
                 <div className="card bg-base-100 shadow-sm border border-base-200">
                     <div className="card-body text-center py-12">
-                        <p className="text-charcoal/60">No upcoming schedules found.</p>
+                        <p className="text-gray-600">No upcoming schedules found.</p>
                     </div>
                 </div>
             ) : (
@@ -38,7 +38,20 @@ export default function Schedules() {
                     {schedules.map((schedule) => (
                         <div key={schedule.id} className="card bg-base-100 shadow-md border border-base-200 hover:shadow-lg transition">
                             <div className="card-body p-6">
-                                <h2 className="card-title text-xl text-maroon">{schedule.event_name}</h2>
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <h2 className="card-title text-xl text-maroon">{schedule.event_name}</h2>
+                                    <span className={`badge badge-sm ${statusBadgeClass(schedule.event_status)}`}>
+                                        {schedule.event_status.replace('_', ' ')}
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <span className="badge badge-outline badge-sm border-maroon/30 text-maroon">
+                                        {schedule.event_category}
+                                    </span>
+                                    <span className="badge badge-outline badge-sm border-gold/40 text-charcoal">
+                                        {schedule.result_family === 'match_based' ? 'Match-based' : 'Rank-based'}
+                                    </span>
+                                </div>
                                 
                                 <div className="space-y-3 mt-4 text-sm text-charcoal/80">
                                     <div className="flex items-start gap-2">
@@ -69,11 +82,17 @@ export default function Schedules() {
                                                     </span>
                                                 ))
                                             ) : (
-                                                <span className="text-gray-400 italic">No participants yet</span>
+                                                <span className="text-gray-600 italic">No participants yet</span>
                                             )}
                                         </div>
                                     </div>
                                 </div>
+
+                                {schedule.notes && (
+                                    <p className="mt-4 text-xs leading-relaxed text-gray-600">
+                                        {schedule.notes}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -81,4 +100,12 @@ export default function Schedules() {
             )}
         </div>
     );
+}
+
+function statusBadgeClass(status: string) {
+    if (status === 'live') return 'badge-error text-white';
+    if (status === 'completed') return 'badge-success text-white';
+    if (status === 'postponed') return 'badge-warning';
+    if (status === 'cancelled') return 'badge-neutral text-white';
+    return 'badge-outline border-maroon/30 text-maroon';
 }
