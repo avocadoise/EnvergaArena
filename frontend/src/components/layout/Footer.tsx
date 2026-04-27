@@ -6,7 +6,7 @@ export default function Footer() {
                     Enverga Arena <br/>
                     <span className="text-sm font-normal text-charcoal">MSEUF Intramurals Management System</span>
                 </p>
-                <p>Copyright © {new Date().getFullYear()} - All right reserved by Manuel S. Enverga University Foundation</p>
+                <p>Copyright &copy; {new Date().getFullYear()} - All rights reserved by Manuel S. Enverga University Foundation</p>
             </aside>
         </footer>
     );

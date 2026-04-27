@@ -16,30 +16,31 @@ export default function Navbar() {
                         <li><NavLink to="/"><Home className="w-4 h-4"/> Home</NavLink></li>
                         <li><NavLink to="/schedules"><Calendar className="w-4 h-4"/> Schedules</NavLink></li>
                         <li><NavLink to="/results"><Trophy className="w-4 h-4"/> Results & Tally</NavLink></li>
+                        <li><NavLink to="/rooney"><Bot className="w-4 h-4"/> Rooney AI</NavLink></li>
                     </ul>
                 </div>
-                <NavLink to="/" className="btn btn-ghost text-xl font-bold tracking-tight text-gold hover:bg-white/10">
+                <NavLink to="/" className="btn btn-ghost text-xl font-bold tracking-tight text-white hover:bg-white/10">
                     Enverga Arena
                 </NavLink>
             </div>
             
             <div className="navbar-center hidden lg:flex">
                 <ul className="menu menu-horizontal px-1 font-medium text-white/90">
-                    <li><NavLink to="/" className={({isActive}) => isActive ? "text-gold bg-white/10" : "hover:text-gold"}><Home className="w-4 h-4 mr-1"/> Home</NavLink></li>
-                    <li><NavLink to="/schedules" className={({isActive}) => isActive ? "text-gold bg-white/10" : "hover:text-gold"}><Calendar className="w-4 h-4 mr-1"/> Schedules</NavLink></li>
-                    <li><NavLink to="/results" className={({isActive}) => isActive ? "text-gold bg-white/10" : "hover:text-gold"}><Trophy className="w-4 h-4 mr-1"/> Results</NavLink></li>
-                    <li><NavLink to="/rooney" className={({isActive}) => isActive ? "text-gold bg-white/10" : "hover:text-gold"}><Bot className="w-4 h-4 mr-1"/> Rooney AI</NavLink></li>
+                    <li><NavLink to="/" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><Home className="w-4 h-4 mr-1"/> Home</NavLink></li>
+                    <li><NavLink to="/schedules" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><Calendar className="w-4 h-4 mr-1"/> Schedules</NavLink></li>
+                    <li><NavLink to="/results" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><Trophy className="w-4 h-4 mr-1"/> Results</NavLink></li>
+                    <li><NavLink to="/rooney" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><Bot className="w-4 h-4 mr-1"/> Rooney AI</NavLink></li>
                 </ul>
             </div>
             
             <div className="navbar-end gap-2">
                 {!isAuthenticated ? (
-                    <NavLink to="/login" className="btn btn-sm btn-ghost text-ivory hover:bg-white/10 hover:text-gold border border-white/20">
+                    <NavLink to="/login" className="btn btn-sm btn-ghost text-white hover:bg-white/10 border border-white/30">
                         <LogIn className="w-4 h-4 mr-1"/> Login
                     </NavLink>
                 ) : (
                     <div className="dropdown dropdown-end">
-                        <div tabIndex={0} role="button" className="btn btn-ghost btn-sm text-gold hover:bg-white/10">
+                        <div tabIndex={0} role="button" className="btn btn-ghost btn-sm text-white hover:bg-white/10 border border-white/20">
                             <Users className="w-4 h-4 mr-1"/>
                             {user?.username}
                         </div>
