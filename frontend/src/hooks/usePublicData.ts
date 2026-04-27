@@ -14,12 +14,16 @@ export interface EventParticipant {
     department: number;
     department_name: string;
     department_acronym: string;
+    status: string;
 }
 
 export interface EventSchedule {
     id: number;
     event: number;
     event_name: string;
+    event_category: string;
+    event_status: 'scheduled' | 'live' | 'completed' | 'postponed' | 'cancelled';
+    is_program_event: boolean;
     result_family: string;
     venue: number | null;
     venue_name: string | null;
@@ -83,6 +87,7 @@ export interface MedalTally {
     gold: number;
     silver: number;
     bronze: number;
+    total_medals: number;
     total_points: number;
     last_updated: string;
 }
