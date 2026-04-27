@@ -6,8 +6,8 @@ export default function Home() {
     return (
         <div className="space-y-16 py-8">
             {/* Hero Section */}
-            <section className="flex flex-col items-center justify-center py-12 lg:py-24 text-center px-4 bg-gradient-to-b from-maroon/5 to-transparent rounded-3xl border border-maroon/10">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold/20 text-yellow-800 text-sm font-semibold mb-6">
+            <section className="flex flex-col items-center justify-center py-12 lg:py-24 text-center px-4 bg-base-100 rounded-lg border border-base-300 shadow-sm">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-maroon/10 text-maroon text-sm font-semibold mb-6">
                     <Activity className="w-4 h-4"/> Live Intramurals 2026
                 </div>
                 <h1 className="text-5xl md:text-6xl font-black text-maroon tracking-tight mb-6 drop-shadow-sm">
@@ -58,33 +58,64 @@ function Top3Widget() {
         );
     }
 
-    const top3 = tally.slice(0, 3);
+    const top3 = tally.slice(0, 3).map((dept, index) => ({
+        ...dept,
+        rank: index + 1,
+    }));
+
+    const podium = [
+        top3[0] && {
+            ...top3[0],
+            orderClass: 'md:order-2',
+            cardClass: 'border-yellow-500 bg-yellow-50 shadow-2xl md:-mt-8 md:scale-110 z-10',
+            rankClass: 'bg-yellow-500 text-white',
+            medalLabel: 'Gold',
+            medalClass: 'text-yellow-700',
+        },
+        top3[1] && {
+            ...top3[1],
+            orderClass: 'md:order-1',
+            cardClass: 'border-slate-400 bg-slate-50',
+            rankClass: 'bg-slate-500 text-white',
+            medalLabel: 'Silver',
+            medalClass: 'text-slate-600',
+        },
+        top3[2] && {
+            ...top3[2],
+            orderClass: 'md:order-3',
+            cardClass: 'border-amber-700 bg-amber-50',
+            rankClass: 'bg-amber-700 text-white',
+            medalLabel: 'Bronze',
+            medalClass: 'text-amber-700',
+        },
+    ].filter(Boolean);
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {top3.map((dept, index) => (
-                <div 
-                    key={dept.id} 
-                    className={`card bg-base-100 shadow-xl border-t-4 ${
-                        index === 0 ? 'border-yellow-400 scale-105 z-10' : 
-                        index === 1 ? 'border-gray-300' : 
-                        'border-amber-700'
-                    }`}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+            {podium.map((dept) => (
+                <div
+                    key={dept.id}
+                    className={`card shadow-xl border-t-4 transition-transform ${dept.orderClass} ${dept.cardClass}`}
                 >
-                    <div className="card-body items-center text-center p-8">
-                        <div className="text-5xl font-black mb-2 opacity-20 absolute top-4 left-4">
-                            #{index + 1}
+                    <div className={`card-body items-center text-center ${dept.rank === 1 ? 'p-9' : 'p-8'}`}>
+                        <div className={`absolute top-4 left-4 rounded-full px-3 py-1 text-sm font-black ${dept.rankClass}`}>
+                            #{dept.rank}
                         </div>
-                        <h3 className="card-title text-3xl font-black text-maroon mt-4">{dept.department_acronym}</h3>
-                        <p className="text-sm text-gray-500 mb-4">{dept.department_name}</p>
+                        <div className={`text-sm font-black uppercase tracking-wider ${dept.medalClass}`}>
+                            {dept.medalLabel}
+                        </div>
+                        <h3 className={`${dept.rank === 1 ? 'text-5xl' : 'text-4xl'} font-black text-maroon mt-2`}>
+                            {dept.department_acronym}
+                        </h3>
+                        <p className="text-sm text-gray-600 mb-4">{dept.department_name}</p>
                         
                         <div className="flex gap-4 justify-center mt-2">
                             <div className="text-center">
-                                <div className="text-xl font-bold text-yellow-600">{dept.gold}</div>
+                                <div className="text-xl font-bold text-gold">{dept.gold}</div>
                                 <div className="text-xs font-bold uppercase">Gold</div>
                             </div>
                             <div className="text-center">
-                                <div className="text-xl font-bold text-gray-500">{dept.silver}</div>
+                                <div className="text-xl font-bold text-gray-700">{dept.silver}</div>
                                 <div className="text-xs font-bold uppercase">Silver</div>
                             </div>
                             <div className="text-center">
@@ -94,8 +125,11 @@ function Top3Widget() {
                         </div>
                         
                         <div className="mt-6 pt-4 border-t w-full">
-                            <div className="text-sm uppercase font-bold text-gray-400">Total Points</div>
-                            <div className="text-3xl font-black text-charcoal">{dept.total_points}</div>
+                            <div className="text-sm uppercase font-bold text-gray-600">Points</div>
+                            <div className={`${dept.rank === 1 ? 'text-4xl' : 'text-3xl'} font-black text-charcoal`}>
+                                {dept.total_points}
+                            </div>
+                            <div className="text-xs text-gray-600">{dept.total_medals} total medals</div>
                         </div>
                     </div>
                 </div>

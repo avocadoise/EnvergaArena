@@ -9,11 +9,16 @@ export default function Results() {
     return (
         <div className="py-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-                <h1 className="text-3xl font-bold text-maroon flex items-center gap-2">
-                    <Trophy className="w-8 h-8 text-gold"/> Official Results
-                </h1>
+                <div>
+                    <h1 className="text-3xl font-bold text-maroon flex items-center gap-2">
+                        <Trophy className="w-8 h-8 text-gold"/> Official Results
+                    </h1>
+                    <p className="text-sm text-gray-600 mt-1">
+                        Leaderboard ranks compare gold first, then silver, then bronze. Points use the demo 5/3/1 formula.
+                    </p>
+                </div>
                 
-                <div className="tabs tabs-boxed bg-base-200">
+                <div className="tabs tabs-boxed bg-base-200 text-charcoal">
                     <a 
                         className={`tab ${activeTab === 'tally' ? 'tab-active bg-maroon text-white' : ''}`}
                         onClick={() => setActiveTab('tally')}
@@ -41,49 +46,58 @@ function MedalTallyTab() {
     if (isError) return <ErrorMessage text="Failed to load medal tally." />;
 
     return (
-        <div className="overflow-x-auto bg-base-100 rounded-xl shadow-lg border border-base-200">
-            <table className="table table-zebra w-full text-center">
-                <thead className="bg-maroon text-white text-sm">
-                    <tr>
-                        <th className="w-16">Rank</th>
-                        <th className="text-left">Department</th>
-                        <th className="text-yellow-400"><Medal className="w-5 h-5 mx-auto"/> Gold</th>
-                        <th className="text-gray-300"><Medal className="w-5 h-5 mx-auto"/> Silver</th>
-                        <th className="text-amber-600"><Medal className="w-5 h-5 mx-auto"/> Bronze</th>
-                        <th className="text-gold font-bold">Total Points</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {tally?.map((row, idx) => (
-                        <tr key={row.id} className="hover">
-                            <td className="font-bold text-lg">{idx + 1}</td>
-                            <td className="text-left font-semibold flex items-center gap-2">
-                                {row.department_color && (
-                                    <span 
-                                        className="w-3 h-3 rounded-full" 
-                                        style={{ backgroundColor: row.department_color }}
-                                    ></span>
-                                )}
-                                {row.department_acronym}
-                                <span className="text-xs font-normal text-gray-500 hidden sm:inline">
-                                    - {row.department_name}
-                                </span>
-                            </td>
-                            <td className="font-bold text-yellow-600">{row.gold}</td>
-                            <td className="font-bold text-gray-500">{row.silver}</td>
-                            <td className="font-bold text-amber-700">{row.bronze}</td>
-                            <td className="font-bold text-maroon text-lg">{row.total_points}</td>
-                        </tr>
-                    ))}
-                    {(!tally || tally.length === 0) && (
+        <div className="space-y-3">
+            <div className="alert bg-base-100 border-base-300 text-charcoal">
+                <span>
+                    Rank is medal-priority: Gold, then Silver, then Bronze. Total medals and points are shown for context.
+                </span>
+            </div>
+            <div className="overflow-x-auto bg-base-100 rounded-xl shadow-lg border border-base-200">
+                <table className="table table-zebra w-full text-center">
+                    <thead className="bg-maroon text-white text-sm">
                         <tr>
-                            <td colSpan={6} className="text-center py-10 text-gray-500">
-                                No medal records found.
-                            </td>
+                            <th className="w-16">Rank</th>
+                            <th className="text-left">Department</th>
+                            <th><Medal className="w-5 h-5 mx-auto"/> Gold</th>
+                            <th><Medal className="w-5 h-5 mx-auto"/> Silver</th>
+                            <th><Medal className="w-5 h-5 mx-auto"/> Bronze</th>
+                            <th>Total Medals</th>
+                            <th className="font-bold">Points</th>
                         </tr>
-                    )}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {tally?.map((row, idx) => (
+                            <tr key={row.id} className="hover">
+                                <td className="font-bold text-lg">{idx + 1}</td>
+                                <td className="text-left font-semibold flex items-center gap-2">
+                                    {row.department_color && (
+                                        <span
+                                            className="w-3 h-3 rounded-full"
+                                            style={{ backgroundColor: row.department_color }}
+                                        ></span>
+                                    )}
+                                    {row.department_acronym}
+                                    <span className="text-xs font-normal text-gray-600 hidden sm:inline">
+                                        - {row.department_name}
+                                    </span>
+                                </td>
+                                <td className="font-bold text-gold">{row.gold}</td>
+                                <td className="font-bold text-gray-700">{row.silver}</td>
+                                <td className="font-bold text-amber-700">{row.bronze}</td>
+                                <td className="font-semibold">{row.total_medals}</td>
+                                <td className="font-bold text-maroon text-lg">{row.total_points}</td>
+                            </tr>
+                        ))}
+                        {(!tally || tally.length === 0) && (
+                            <tr>
+                                <td colSpan={7} className="text-center py-10 text-gray-500">
+                                    No medal records found.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
@@ -112,17 +126,17 @@ function RecentResultsTab() {
                                     {match.is_final && <span className="badge badge-error badge-sm text-white">Final</span>}
                                 </div>
                                 <div className="flex justify-between items-center text-lg font-bold">
-                                    <div className={`w-1/3 text-center ${match.winner === match.home_department ? 'text-green-600' : ''}`}>
+                                    <div className={`w-1/3 text-center ${match.winner === match.home_department ? 'text-success' : ''}`}>
                                         {match.home_department_name}
                                     </div>
                                     <div className="w-1/3 text-center text-2xl tracking-widest bg-base-200 py-1 rounded">
                                         {match.home_score} - {match.away_score}
                                     </div>
-                                    <div className={`w-1/3 text-center ${match.winner === match.away_department ? 'text-green-600' : ''}`}>
+                                    <div className={`w-1/3 text-center ${match.winner === match.away_department ? 'text-success' : ''}`}>
                                         {match.away_department_name}
                                     </div>
                                 </div>
-                                <div className="text-xs text-center text-gray-400 mt-2">
+                                <div className="text-xs text-center text-gray-600 mt-2">
                                     {format(parseISO(match.recorded_at), 'MMM d, h:mm a')}
                                 </div>
                             </div>

@@ -22,7 +22,7 @@ export default function Rooney() {
     const [messages, setMessages] = useState<RooneyMessage[]>([
         {
             role: 'rooney',
-            text: "Hi! I'm Rooney, your official MSEUF intramurals assistant. Ask me about schedules, standings, and results — grounded in live data.",
+            text: "Hi! I'm Rooney, your official MSEUF intramurals assistant. Ask me about schedules, standings, and results - grounded in live data.",
             grounded: true,
             source_labels: [],
         }
@@ -74,12 +74,12 @@ export default function Rooney() {
                 </div>
                 <div>
                     <h1 className="text-2xl font-black text-maroon">Rooney AI</h1>
-                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <p className="text-xs text-gray-600 flex items-center gap-1">
                         <Shield className="w-3 h-3"/> Answers grounded in live Enverga Arena data only
                     </p>
                 </div>
                 <div className="ml-auto badge badge-success text-white gap-1">
-                    <Sparkles className="w-3 h-3"/> Gemini 2.0
+                    <Sparkles className="w-3 h-3"/> Gemini 2.5 Flash Lite
                 </div>
             </div>
 
@@ -98,14 +98,14 @@ export default function Rooney() {
                                 : 'bg-base-200 text-charcoal rounded-bl-none'
                         }`}>
                             {msg.role === 'rooney' && !msg.grounded && msg.refusal_reason ? (
-                                <p className="text-sm italic text-red-500">{msg.refusal_reason}</p>
+                                <p className="text-sm italic text-error">{msg.refusal_reason}</p>
                             ) : (
                                 <p className="text-sm leading-relaxed">{msg.text}</p>
                             )}
                             {msg.role === 'rooney' && msg.source_labels && msg.source_labels.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-2">
                                     {msg.source_labels.map(label => (
-                                        <span key={label} className="badge badge-outline badge-sm text-gray-500">
+                                        <span key={label} className="badge badge-outline badge-sm text-gray-700">
                                             {label}
                                         </span>
                                     ))}
