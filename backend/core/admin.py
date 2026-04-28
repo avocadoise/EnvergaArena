@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Department, Venue, VenueArea, UserProfile
+from .models import Department, Venue, VenueArea, UserProfile, NewsArticle
 
 @admin.register(Department)
 class DepartmentAdmin(admin.ModelAdmin):
@@ -26,3 +26,10 @@ class UserProfileAdmin(admin.ModelAdmin):
     list_display = ('user', 'role', 'department')
     list_filter = ('role', 'department')
     search_fields = ('user__username', 'user__email')
+
+
+@admin.register(NewsArticle)
+class NewsArticleAdmin(admin.ModelAdmin):
+    list_display = ('title', 'article_type', 'status', 'event', 'department', 'published_at', 'ai_generated')
+    list_filter = ('status', 'article_type', 'ai_generated', 'department')
+    search_fields = ('title', 'slug', 'summary')
