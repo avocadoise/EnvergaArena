@@ -1,28 +1,35 @@
 import { Link } from 'react-router-dom';
 import { useMedalTally, usePublishedNews } from '../../hooks/usePublicData';
 import { Trophy, ArrowRight, Activity, Newspaper, Sparkles } from 'lucide-react';
+import DepartmentLogo from '../../components/DepartmentLogo';
 
 export default function Home() {
     return (
         <div className="space-y-16 py-8">
             {/* Hero Section */}
-            <section className="flex flex-col items-center justify-center py-12 lg:py-24 text-center px-4 bg-base-100 rounded-lg border border-base-300 shadow-sm">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-maroon/10 text-maroon text-sm font-semibold mb-6">
-                    <Activity className="w-4 h-4"/> Live Intramurals 2026
-                </div>
-                <h1 className="text-5xl md:text-6xl font-black text-maroon tracking-tight mb-6 drop-shadow-sm">
-                    Enverga Arena
-                </h1>
-                <p className="text-xl md:text-2xl max-w-3xl text-charcoal/80 mb-10 leading-relaxed">
-                    The official tournament portal for the Manuel S. Enverga University Foundation intramurals.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4">
-                    <Link to="/schedules" className="btn btn-lg bg-maroon hover:bg-maroon-dark text-white border-none shadow-lg">
-                        View Schedules
-                    </Link>
-                    <Link to="/results" className="btn btn-lg btn-outline border-maroon text-maroon hover:bg-maroon hover:text-white bg-white">
-                        Live Results & Tally
-                    </Link>
+            <section
+                className="relative overflow-hidden rounded-lg border border-base-300 bg-cover bg-center px-4 py-12 text-center shadow-sm lg:py-24"
+                style={{ backgroundImage: "url('/intrams.png')" }}
+            >
+                <div className="absolute inset-0 bg-charcoal/55" />
+                <div className="relative mx-auto flex max-w-4xl flex-col items-center justify-center rounded-lg border border-white/25 bg-white/55 px-5 py-8 shadow-xl md:px-10">
+                    <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-maroon/10 px-3 py-1 text-sm font-semibold text-maroon">
+                        <Activity className="w-4 h-4"/> Live Intramurals 2026
+                    </div>
+                    <h1 className="mb-6 text-5xl font-black tracking-tight text-maroon drop-shadow-sm md:text-6xl">
+                        Enverga Arena
+                    </h1>
+                    <p className="mb-10 max-w-3xl text-xl leading-relaxed text-charcoal md:text-2xl">
+                        The official tournament portal for the Manuel S. Enverga University Foundation intramurals.
+                    </p>
+                    <div className="flex flex-col gap-4 sm:flex-row">
+                        <Link to="/schedules" className="btn btn-lg border-none bg-maroon text-white shadow-lg hover:bg-maroon-dark">
+                            View Schedules
+                        </Link>
+                        <Link to="/results" className="btn btn-lg border-maroon bg-white text-maroon hover:bg-maroon hover:text-white">
+                            Live Results & Tally
+                        </Link>
+                    </div>
                 </div>
             </section>
 
@@ -106,6 +113,11 @@ function Top3Widget() {
                         <div className={`text-sm font-black uppercase tracking-wider ${dept.medalClass}`}>
                             {dept.medalLabel}
                         </div>
+                        <DepartmentLogo
+                            acronym={dept.department_acronym}
+                            name={dept.department_name}
+                            className={dept.rank === 1 ? 'h-24 w-24' : 'h-20 w-20'}
+                        />
                         <h3 className={`${dept.rank === 1 ? 'text-5xl' : 'text-4xl'} font-black text-maroon mt-2`}>
                             {dept.department_acronym}
                         </h3>
