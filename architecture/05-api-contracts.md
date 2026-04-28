@@ -4,14 +4,17 @@
 
 - Base URL (dev): `http://localhost:8000/api`
 - Content type: `application/json`
-- Auth scheme: `Authorization: Bearer <access_token>`
+- Protected requests use `Authorization: Bearer <access_token>`
+- Browser requests use `withCredentials: true` so the HttpOnly refresh cookie can be sent to auth refresh/logout endpoints
 
 ## Authentication Endpoints
 
 | Method | Path | Auth Required | Description |
 | --- | --- | --- | --- |
-| POST | `/auth/login/` | No | Obtain access + refresh JWT and custom role claims |
-| POST | `/auth/refresh/` | No | Refresh access token using refresh token |
+| POST | `/auth/login/` | No | Validate credentials, return access JWT, set refresh JWT HttpOnly cookie |
+| POST | `/auth/refresh/` | Refresh cookie | Return fresh access JWT from HttpOnly refresh cookie |
+| POST | `/auth/logout/` | No | Clear refresh cookie |
+| GET | `/auth/me/` | Access JWT | Return current user auth payload |
 
 ### Login Request Example
 
@@ -22,29 +25,107 @@
 }
 ```
 
-### Login Response Example
+### Login Response Body
 
 ```json
 {
-  "refresh": "<jwt>",
   "access": "<jwt_with_role_and_department_claims>"
 }
 ```
 
-## Public and Router Endpoints
+The refresh token is not returned in JSON. It is set by the backend as an HttpOnly cookie.
 
-All of the following are mounted under `/public/`.
+### Access Token Claims
+
+```json
+{
+  "user_id": 1,
+  "username": "admin",
+  "role": "admin",
+  "department_id": null,
+  "department_name": null,
+  "department_acronym": null
+}
+```
+
+## Public Tryout Endpoints
+
+Students do not log in.
+
+| Method | Path | Access | Description |
+| --- | --- | --- | --- |
+| POST | `/public/tryouts/send-otp/` | Public | Validate Turnstile and school email, send OTP |
+| POST | `/public/tryouts/verify-otp/` | Public | Verify OTP and mark code used |
+| POST | `/public/tryouts/apply/` | Public | Create verified tryout application |
+
+Allowed student email domain: `@student.mseuf.edu.ph`.
+
+### Send OTP Payload
+
+```json
+{
+  "full_name": "Juan Dela Cruz",
+  "student_no": "2026-00001",
+  "school_email": "juan@student.mseuf.edu.ph",
+  "department": 1,
+  "schedule": 10,
+  "turnstile_token": "<client_turnstile_token>"
+}
+```
+
+### Verify OTP Payload
+
+```json
+{
+  "student_no": "2026-00001",
+  "school_email": "juan@student.mseuf.edu.ph",
+  "department": 1,
+  "schedule": 10,
+  "code": "123456"
+}
+```
+
+### Apply Payload
+
+```json
+{
+  "full_name": "Juan Dela Cruz",
+  "student_no": "2026-00001",
+  "school_email": "juan@student.mseuf.edu.ph",
+  "department": 1,
+  "schedule": 10,
+  "program": "BS Computer Science",
+  "year_level": "2nd Year",
+  "contact_no": "09171234567",
+  "prior_experience": "Varsity applicant",
+  "notes": "",
+  "consent": true
+}
+```
+
+## Router Endpoints Under `/api/public/`
+
+The prefix does not mean every method is anonymous. Write permissions are enforced by each viewset.
 
 ### Core Reference Data
 
 | Method | Path | Access |
 | --- | --- | --- |
 | GET | `/public/departments/` | Public |
-| GET | `/public/departments/{id}/` | Public |
+| POST/PATCH/DELETE | `/public/departments/` | Admin |
 | GET | `/public/venues/` | Public |
-| GET | `/public/venues/{id}/` | Public |
+| POST/PATCH/DELETE | `/public/venues/` | Admin |
 | GET | `/public/venue-areas/` | Public |
-| GET | `/public/venue-areas/{id}/` | Public |
+| POST/PATCH/DELETE | `/public/venue-areas/` | Admin |
+
+### Public News
+
+| Method | Path | Access |
+| --- | --- | --- |
+| GET | `/public/news/` | Public, published only |
+| GET | `/public/news/{slug}/` | Public, published only |
+
+Supported filters include `article_type`, `department`, `event`, and `q`.
 
 ### Event Catalog
 
@@ -52,8 +133,27 @@ All of the following are mounted under `/public/`.
 | --- | --- | --- |
 | GET | `/public/events/` | Public |
 | GET | `/public/events/{id}/` | Public |
+| POST/PATCH/DELETE | `/public/events/` | Admin |
 | GET | `/public/event-categories/` | Public |
-| GET | `/public/event-categories/{id}/` | Public |
+| POST/PATCH/DELETE | `/public/event-categories/` | Admin |
+
+Event payload fields include:
+
+- `name`
+- `slug`
+- `category`
+- `division`
+- `result_family`
+- `competition_format`
+- `best_of`
+- `team_size_min`
+- `team_size_max`
+- `roster_size_max`
+- `medal_bearing`
+- `ruleset_ref`
+- `sort_order`
+- `is_program_event`
+- `status`
 
 ### Schedules
 
@@ -65,21 +165,41 @@ All of the following are mounted under `/public/`.
 | PATCH | `/public/schedules/{id}/` | Admin |
 | DELETE | `/public/schedules/{id}/` | Admin |
 
+Schedule payload fields include:
+
+- `event`
+- `phase`
+- `round_label`
+- `scheduled_start`
+- `scheduled_end`
+- `venue`
+- `venue_area`
+- `status`
+- `notes`
+
 ### Athletes
 
 | Method | Path | Access |
 | --- | --- | --- |
-| GET | `/public/athletes/` | Authenticated (admin all, dept rep scoped) |
+| GET | `/public/athletes/` | Authenticated; admin all, department rep scoped |
 | GET | `/public/athletes/{id}/` | Authenticated |
 | POST | `/public/athletes/` | Authenticated |
-| PATCH | `/public/athletes/{id}/` | Authenticated (scope enforced by queryset) |
-| DELETE | `/public/athletes/{id}/` | Authenticated (scope enforced by queryset) |
+| PATCH | `/public/athletes/{id}/` | Authenticated and scoped |
+| DELETE | `/public/athletes/{id}/` | Authenticated and scoped |
+
+### Tryout Applications
+
+| Method | Path | Access |
+| --- | --- | --- |
+| GET | `/public/tryout-applications/` | Authenticated; admin all, department rep scoped |
+| PATCH | `/public/tryout-applications/{id}/` | Authenticated and scoped |
+| POST | `/public/tryout-applications/{id}/convert/` | Authenticated and scoped |
 
 ### Registrations
 
 | Method | Path | Access |
 | --- | --- | --- |
-| GET | `/public/registrations/` | Authenticated (admin all, dept rep scoped) |
+| GET | `/public/registrations/` | Authenticated; admin all, department rep scoped |
 | GET | `/public/registrations/{id}/` | Authenticated |
 | POST | `/public/registrations/` | Authenticated |
 | PATCH | `/public/registrations/{id}/` | Authenticated |
@@ -116,6 +236,23 @@ All of the following are mounted under `/public/`.
 | GET | `/public/medal-tally/` | Public |
 | GET | `/public/medal-tally/{id}/` | Public |
 
+### Rooney Logs
+
+| Method | Path | Access |
+| --- | --- | --- |
+| GET | `/public/rooney-logs/` | Admin |
+
+## Admin Endpoints Under `/api/admin/`
+
+| Method | Path | Access | Description |
+| --- | --- | --- | --- |
+| GET/POST/PATCH/DELETE | `/admin/news/` | Admin | Manage all official news articles |
+| GET/POST/PATCH/DELETE | `/admin/ai-recaps/` | Admin | Manage internal recap drafts |
+| POST | `/admin/ai-recaps/generate/` | Admin | Generate recap from schedule/result context |
+| POST | `/admin/ai-recaps/{id}/approve/` | Admin | Mark recap approved |
+| POST | `/admin/ai-recaps/{id}/discard/` | Admin | Discard recap |
+| POST | `/admin/ai-recaps/{id}/publish/` | Admin | Publish recap as official NewsArticle |
+
 ## Rooney API
 
 | Method | Path | Access | Description |
@@ -136,19 +273,8 @@ All of the following are mounted under `/public/`.
 {
   "answer_text": "CAFA is currently leading with ...",
   "grounded": true,
-  "source_labels": ["official_medal_tally", "Match Results"],
+  "source_labels": ["Official Medal Tally"],
   "refusal_reason": ""
-}
-```
-
-### Rooney Refusal Example
-
-```json
-{
-  "answer_text": "",
-  "grounded": false,
-  "source_labels": [],
-  "refusal_reason": "I can only answer from official intramurals data currently available."
 }
 ```
 
@@ -164,13 +290,9 @@ All of the following are mounted under `/public/`.
 }
 ```
 
-Behavior notes:
+For department reps, backend validation scopes department ownership and roster athletes.
 
-- for non-admin users, backend may override `department` using profile mapping
-- duplicate (`schedule`, `department`) registration is rejected
-- roster athletes must belong to same department
-
-### Update Registration Status (Admin)
+### Update Registration Status
 
 ```json
 {
@@ -193,17 +315,7 @@ Behavior notes:
 }
 ```
 
-If `winner` is omitted and not a draw, backend infers winner from scores.
-
-### Add Match Set
-
-```json
-{
-  "set_number": 1,
-  "home_score": 25,
-  "away_score": 22
-}
-```
+If `winner` is omitted and the score is not tied, backend infers winner from scores.
 
 ### Create Podium Result
 
@@ -213,10 +325,11 @@ If `winner` is omitted and not a draw, backend infers winner from scores.
   "department": 2,
   "rank": 1,
   "medal": "gold",
-  "points_awarded": 0,
   "is_final": true
 }
 ```
+
+No points field is accepted or used for medal ranking.
 
 ## Error Handling Model
 
@@ -227,10 +340,10 @@ Common API failure categories:
 - forbidden writes: `403`
 - not found: `404`
 
-Frontend currently reads validation messages for registration errors and login `detail` message.
+Frontend pages surface common validation messages for login, tryouts, registration, schedule/event management, news, and AI recap actions.
 
 ## Contract Caveats
 
-1. README mentions `/api/auth/token/`, but implemented login path is `/api/auth/login/`.
-2. OpenAPI schema is not currently generated or committed.
-3. Versioning strategy for API evolution is not yet defined.
+1. OpenAPI schema is not currently generated or committed.
+2. Versioning strategy for API evolution is not yet defined.
+3. Some operational endpoints are mounted under `/api/public/` for historical router simplicity; permission classes still enforce protected writes.
