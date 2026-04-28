@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMedalTally, useMatchResults, usePodiumResults } from '../../hooks/usePublicData';
 import { Trophy, Medal, Swords, Hash } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import DepartmentLogo from '../../components/DepartmentLogo';
 
 export default function Results() {
     const [activeTab, setActiveTab] = useState<'tally' | 'recent'>('tally');
@@ -68,17 +69,20 @@ function MedalTallyTab() {
                         {tally?.map((row, idx) => (
                             <tr key={row.id} className="hover">
                                 <td className="font-bold text-lg">{idx + 1}</td>
-                                <td className="text-left font-semibold flex items-center gap-2">
-                                    {row.department_color && (
-                                        <span
-                                            className="w-3 h-3 rounded-full"
-                                            style={{ backgroundColor: row.department_color }}
-                                        ></span>
-                                    )}
-                                    {row.department_acronym}
-                                    <span className="text-xs font-normal text-gray-600 hidden sm:inline">
-                                        - {row.department_name}
-                                    </span>
+                                <td className="text-left">
+                                    <div className="flex items-center gap-3">
+                                        <DepartmentLogo
+                                            acronym={row.department_acronym}
+                                            name={row.department_name}
+                                            className="h-9 w-9"
+                                        />
+                                        <div>
+                                            <div className="font-black text-maroon">{row.department_acronym}</div>
+                                            <div className="hidden text-xs font-normal text-gray-600 sm:block">
+                                                {row.department_name}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td className="font-bold text-gold">{row.gold}</td>
                                 <td className="font-bold text-gray-700">{row.silver}</td>
@@ -152,10 +156,17 @@ function RecentResultsTab() {
                 <div className="space-y-4">
                     {podiums?.map(podium => (
                         <div key={`podium-${podium.id}`} className="card bg-base-100 shadow-sm border border-base-200">
-                            <div className="card-body p-4 flex flex-row items-center justify-between">
-                                <div>
+                            <div className="card-body p-4 flex flex-row items-center justify-between gap-4">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <DepartmentLogo
+                                        acronym={podium.department_acronym}
+                                        name={podium.department_name}
+                                        className="h-12 w-12"
+                                    />
+                                    <div className="min-w-0">
                                     <div className="text-xs font-bold text-maroon uppercase tracking-wider mb-1">{podium.event_name}</div>
                                     <div className="font-bold text-lg">{podium.department_name}</div>
+                                    </div>
                                 </div>
                                 <div className="text-right">
                                     <div className="text-2xl font-black text-charcoal">Rank {podium.rank}</div>
