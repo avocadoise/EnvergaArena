@@ -22,7 +22,13 @@ export interface VenueArea {
 export interface Venue {
     id: number;
     name: string;
+    campus?: string;
+    building?: string;
+    address?: string;
     location: string;
+    is_indoor?: boolean;
+    is_active?: boolean;
+    notes?: string;
     areas: VenueArea[];
 }
 
@@ -193,6 +199,19 @@ export const useVenues = () => {
         queryFn: async () => {
             const { data } = await api.get('/public/venues/');
             return data;
+        },
+    });
+};
+
+export const useCreateVenue = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (venue: Partial<Venue>) => {
+            const { data } = await api.post('/public/venues/', venue);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['venues'] });
         },
     });
 };
