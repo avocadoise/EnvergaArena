@@ -19,6 +19,11 @@ class EventCategoryViewSet(viewsets.ModelViewSet):
 
 
 class EventViewSet(viewsets.ModelViewSet):
-    queryset = Event.objects.select_related('category').exclude(category__name='Previous Events (Seeded)')
+    queryset = (
+        Event.objects
+        .select_related('category')
+        .prefetch_related('schedules__registrations', 'schedules__podium_results')
+        .exclude(category__name='Previous Events (Seeded)')
+    )
     serializer_class = EventSerializer
     permission_classes = [IsAdminOrReadOnly]
