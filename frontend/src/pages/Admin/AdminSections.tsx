@@ -9,7 +9,6 @@ import {
     Plus,
     RefreshCcw,
     Search,
-    Settings,
     Sparkles,
     Swords,
     XCircle,
@@ -41,7 +40,7 @@ export function DepartmentsPage() {
     const { data: registrations } = useRegistrations();
     const [query, setQuery] = useState('');
     const rows = (departments || []).filter(dept =>
-        `${dept.name} ${dept.acronym}`.toLowerCase().includes(query.toLowerCase())
+        `${dept.name} ${dept.acronym} ${dept.representative_name || ''} ${dept.representative_username || ''}`.toLowerCase().includes(query.toLowerCase())
     );
 
     return (
@@ -67,9 +66,12 @@ export function DepartmentsPage() {
                             <tr key={dept.id}>
                                 <td className="font-black text-maroon">{dept.acronym}</td>
                                 <td className="font-semibold">{dept.name}</td>
-                                <td>{dept.acronym.toLowerCase()}_rep</td>
+                                <td>
+                                    <div className="font-semibold text-charcoal">{dept.representative_name || 'Unassigned'}</div>
+                                    {dept.representative_username && <div className="text-xs text-gray-600">{dept.representative_username}</div>}
+                                </td>
                                 <td>{registrations?.filter(reg => reg.department === dept.id).length || 0}</td>
-                                <td><StatusChip status="active" /></td>
+                                <td><StatusChip status={dept.operational_status || 'needs_representative'} /></td>
                             </tr>
                         ))}
                     </tbody>
@@ -952,7 +954,43 @@ export function AiRecapsPage() {
 }
 
 export function SettingsPage() {
-    return <WorkflowPage icon={<Settings className="h-6 w-6" />} title="Settings" text="Operational settings for enabled events, medal rules, and display preferences can be added here without changing the public portal." />;
+    const { data: departments } = useDepartments();
+    const { data: events } = useEvents();
+    const { data: news } = useAdminNews();
+    const { data: recaps } = useAIRecaps();
+    const configuredDepartments = departments?.filter(dept => dept.operational_status === 'ready').length || 0;
+    const medalEvents = events?.filter(event => !event.is_program_event).length || 0;
+    const publishedNews = news?.filter(article => article.status === 'published').length || 0;
+    const pendingRecaps = recaps?.filter(recap => ['generated', 'under_review', 'approved'].includes(recap.status)).length || 0;
+
+    return (
+        <div className="space-y-5">
+            <SectionShell title="Settings">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <SettingsMetric label="Representative Scope" value={`${configuredDepartments}/${departments?.length || 0}`} help="One department representative account per department." />
+                    <SettingsMetric label="Medal Events" value={medalEvents} help="Program events are excluded from medal workflows." />
+                    <SettingsMetric label="Published News" value={publishedNews} help="Only published articles appear on public pages and Rooney grounding." />
+                    <SettingsMetric label="Recap Queue" value={pendingRecaps} help="Generated, under-review, and approved drafts waiting for admin action." />
+                </div>
+
+                <div className="mt-6 grid gap-5 xl:grid-cols-3">
+                    <SettingsPanel title="Medal Ranking Rule" status="Locked">
+                        <p>Official rankings use gold first, then silver, then bronze. Total medals are shown only for context and no points are computed.</p>
+                    </SettingsPanel>
+                    <SettingsPanel title="AI Model Fallback" status="Configured">
+                        <p>Backend env controls `GEMINI_PRIMARY_MODEL` and `GEMINI_BACKUP_MODELS`, so Rooney and AI Recaps can fail over during model traffic spikes.</p>
+                    </SettingsPanel>
+                    <SettingsPanel title="Tryout Security" status="Enabled">
+                        <p>Public tryout submissions require student email domain validation, OTP verification, Turnstile validation, and duplicate protection.</p>
+                    </SettingsPanel>
+                </div>
+
+                <div className="mt-6 rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm text-charcoal">
+                    Rotate real API keys before any live demo if they were ever pasted into chat, screenshots, commits, or shared archives. Keep live values in `backend/.env` only and use `.env.example` for documentation.
+                </div>
+            </SectionShell>
+        </div>
+    );
 }
 
 function MedalTable({ title, showCards }: { title: string; showCards: boolean }) {
@@ -1056,18 +1094,40 @@ function TableState({ isLoading, isEmpty, children }: { isLoading?: boolean; isE
     return <div className="overflow-x-auto rounded-lg border border-base-300">{children}</div>;
 }
 
+function SettingsMetric({ label, value, help }: { label: string; value: string | number; help: string }) {
+    return (
+        <div className="rounded-lg border border-base-300 bg-base-100 p-4">
+            <p className="text-xs font-bold uppercase text-gray-500">{label}</p>
+            <p className="mt-1 text-3xl font-black text-charcoal">{value}</p>
+            <p className="mt-2 text-sm text-gray-600">{help}</p>
+        </div>
+    );
+}
+
+function SettingsPanel({ title, status, children }: { title: string; status: string; children: ReactNode }) {
+    return (
+        <section className="rounded-lg border border-base-300 bg-base-100 p-5">
+            <div className="mb-3 flex items-start justify-between gap-3">
+                <h3 className="font-black text-charcoal">{title}</h3>
+                <span className="badge h-auto min-h-6 whitespace-nowrap bg-maroon px-3 py-1 text-xs text-white">{status}</span>
+            </div>
+            <div className="text-sm leading-6 text-gray-600">{children}</div>
+        </section>
+    );
+}
+
 function StatusChip({ status }: { status: string }) {
     const normalized = status.replace('_', ' ');
     const className =
-        ['approved', 'active', 'completed', 'live', 'cleared', 'verified', 'grounded'].includes(status)
+        ['approved', 'active', 'ready', 'completed', 'live', 'cleared', 'verified', 'grounded'].includes(status)
             ? 'badge-success text-white'
-            : ['rejected', 'cancelled', 'refused', 'needs_review'].includes(status)
+            : ['rejected', 'cancelled', 'refused', 'needs_review', 'needs_representative'].includes(status)
                 ? 'badge-error text-white'
                 : ['pending', 'submitted', 'needs_revision', 'scheduled', 'postponed'].includes(status)
                     ? 'badge-warning'
                     : 'badge-outline';
 
-    return <span className={`badge capitalize ${className}`}>{normalized}</span>;
+    return <span className={`badge h-auto min-h-6 whitespace-nowrap px-3 py-1 text-xs capitalize leading-tight ${className}`}>{normalized}</span>;
 }
 
 function NewsStatusChip({ status }: { status: NewsArticle['status'] }) {
@@ -1115,25 +1175,6 @@ function FormCard({ title, icon, children }: { title: string; icon: ReactNode; c
             <h3 className="mb-4 flex items-center gap-2 text-lg font-black text-maroon">{icon}{title}</h3>
             <div className="space-y-3">{children}</div>
         </div>
-    );
-}
-
-function WorkflowPage({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
-    return (
-        <section className="rounded-lg border border-base-300 bg-base-100 p-8 shadow-sm">
-            <div className="flex max-w-3xl items-start gap-4">
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-maroon/10 text-maroon">
-                    {icon}
-                </div>
-                <div>
-                    <h2 className="text-2xl font-black text-charcoal">{title}</h2>
-                    <p className="mt-2 text-gray-600">{text}</p>
-                    <div className="mt-5 rounded-lg border border-base-300 bg-base-200 p-4 text-sm text-gray-700">
-                        This page is wired into the admin navigation now, so the workflow has a home in the existing app while the backing model is added incrementally.
-                    </div>
-                </div>
-            </div>
-        </section>
     );
 }
 
