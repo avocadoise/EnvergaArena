@@ -7,6 +7,12 @@ interface ProtectedRouteProps {
     allowedRoles?: UserRole[];
 }
 
+function getRoleHome(role?: UserRole) {
+    if (role === 'admin') return '/admin';
+    if (role === 'department_rep') return '/portal';
+    return '/';
+}
+
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) => {
     const { user, isAuthenticated, isLoading } = useAuth();
     const location = useLocation();
@@ -25,8 +31,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ allowedRoles }) 
     }
 
     if (allowedRoles && !allowedRoles.includes(user.role)) {
-        // Role not authorized, maybe redirect to an unauthorized page or home
-        return <Navigate to="/" replace />;
+        return <Navigate to={getRoleHome(user.role)} replace />;
     }
 
     return <Outlet />;
