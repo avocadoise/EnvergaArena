@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ReactNode } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { format, parseISO } from 'date-fns';
 import {
     AlertTriangle,
@@ -19,6 +19,7 @@ import {
     useAthletes,
     useApproveAIRecap,
     useCreateAdminNews,
+    useCreateVenue,
     useDepartments,
     useDiscardAIRecap,
     useEventCategories,
@@ -34,6 +35,8 @@ import {
 } from '../../hooks/useAdminData';
 import type { AIRecap, EventRegistration, NewsArticle } from '../../hooks/useAdminData';
 import { useMatchResults, useMedalTally, usePodiumResults, useSchedules } from '../../hooks/usePublicData';
+import type { EventSchedule } from '../../hooks/usePublicData';
+import DepartmentLogo from '../../components/DepartmentLogo';
 
 export function DepartmentsPage() {
     const { data: departments, isLoading } = useDepartments();
@@ -46,7 +49,6 @@ export function DepartmentsPage() {
     return (
         <SectionShell
             title="Departments"
-            actionLabel="Add Department"
             searchValue={query}
             onSearch={setQuery}
         >
@@ -64,7 +66,12 @@ export function DepartmentsPage() {
                     <tbody>
                         {rows.map(dept => (
                             <tr key={dept.id}>
-                                <td className="font-black text-maroon">{dept.acronym}</td>
+                                <td>
+                                    <div className="flex items-center gap-3">
+                                        <DepartmentLogo acronym={dept.acronym} name={dept.name} className="h-9 w-9" />
+                                        <span className="font-black text-maroon">{dept.acronym}</span>
+                                    </div>
+                                </td>
                                 <td className="font-semibold">{dept.name}</td>
                                 <td>
                                     <div className="font-semibold text-charcoal">{dept.representative_name || 'Unassigned'}</div>
@@ -83,13 +90,69 @@ export function DepartmentsPage() {
 
 export function VenuesPage() {
     const { data: venues, isLoading } = useVenues();
+    const createVenue = useCreateVenue();
     const [query, setQuery] = useState('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [form, setForm] = useState({
+        name: '',
+        campus: 'Main Campus',
+        building: '',
+        address: '',
+        location: '',
+        is_indoor: true,
+        is_active: true,
+        notes: '',
+    });
     const rows = (venues || []).filter(venue =>
-        `${venue.name} ${venue.location}`.toLowerCase().includes(query.toLowerCase())
+        `${venue.name} ${venue.location} ${venue.campus || ''} ${venue.building || ''}`.toLowerCase().includes(query.toLowerCase())
     );
 
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setForm({
+            name: '',
+            campus: 'Main Campus',
+            building: '',
+            address: '',
+            location: '',
+            is_indoor: true,
+            is_active: true,
+            notes: '',
+        });
+    };
+
+    const submitVenue = (event: FormEvent) => {
+        event.preventDefault();
+        createVenue.mutate(form, {
+            onSuccess: closeModal,
+        });
+    };
+
     return (
-        <SectionShell title="Venues" actionLabel="Add Venue" searchValue={query} onSearch={setQuery}>
+        <SectionShell title="Venues" searchValue={query} onSearch={setQuery}>
+            <div className="mb-4 flex flex-col gap-3 rounded-lg border border-base-300 bg-base-100 p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h3 className="font-black text-charcoal">Venue Operations</h3>
+                    <p className="text-sm text-gray-600">Create venues now; area management can build on each venue record later.</p>
+                </div>
+                <button className="btn bg-maroon text-white hover:bg-maroon-dark" onClick={() => setIsModalOpen(true)}>
+                    <Plus className="h-4 w-4" />
+                    Add Venue
+                </button>
+            </div>
+
+            {createVenue.isSuccess && (
+                <div className="alert mb-4 border-success/30 bg-success/10 text-charcoal">
+                    Venue added successfully.
+                </div>
+            )}
+
+            {createVenue.isError && (
+                <div className="alert mb-4 border-error/30 bg-error/10 text-charcoal">
+                    Unable to add venue. Check the required fields and try again.
+                </div>
+            )}
+
             <TableState isLoading={isLoading} isEmpty={rows.length === 0}>
                 <div className="grid gap-4 lg:grid-cols-2">
                     {rows.map(venue => (
@@ -97,10 +160,21 @@ export function VenuesPage() {
                             <div className="flex items-start justify-between gap-4">
                                 <div>
                                     <h2 className="text-lg font-black text-charcoal">{venue.name}</h2>
-                                    <p className="text-sm text-gray-600">{venue.location || 'Location TBA'}</p>
+                                    <p className="text-sm text-gray-600">{venue.location || venue.building || 'Location TBA'}</p>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        {venue.campus && <span className="badge badge-sm badge-outline border-maroon/30 text-maroon">{venue.campus}</span>}
+                                        <span className="badge badge-sm badge-outline">{venue.is_indoor ? 'Indoor' : 'Outdoor'}</span>
+                                    </div>
                                 </div>
-                                <StatusChip status="active" />
+                                <StatusChip status={venue.is_active === false ? 'inactive' : 'active'} />
                             </div>
+                            {(venue.building || venue.address || venue.notes) && (
+                                <div className="mt-4 rounded-md bg-base-200 p-3 text-sm text-gray-700">
+                                    {venue.building && <div><span className="font-semibold text-charcoal">Building:</span> {venue.building}</div>}
+                                    {venue.address && <div><span className="font-semibold text-charcoal">Address:</span> {venue.address}</div>}
+                                    {venue.notes && <div><span className="font-semibold text-charcoal">Notes:</span> {venue.notes}</div>}
+                                </div>
+                            )}
                             <div className="mt-4 flex flex-wrap gap-2">
                                 {venue.areas?.map(area => (
                                     <span key={area.id} className="badge badge-outline border-maroon/30 text-maroon">
@@ -112,6 +186,109 @@ export function VenuesPage() {
                     ))}
                 </div>
             </TableState>
+
+            {isModalOpen && (
+                <div className="modal modal-open">
+                    <div className="modal-box max-w-3xl rounded-lg">
+                        <div className="mb-4">
+                            <p className="text-xs font-bold uppercase text-maroon">Venue Management</p>
+                            <h3 className="text-2xl font-black text-charcoal">Add Venue</h3>
+                            <p className="text-sm text-gray-600">Create a venue record for schedule assignment and future venue area management.</p>
+                        </div>
+
+                        <form onSubmit={submitVenue} className="space-y-4">
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <label className="form-control">
+                                    <span className="label-text mb-1 font-semibold">Venue name</span>
+                                    <input
+                                        className="input input-bordered"
+                                        value={form.name}
+                                        onChange={event => setForm({ ...form, name: event.target.value })}
+                                        placeholder="University Indoor Courts"
+                                        required
+                                    />
+                                </label>
+                                <label className="form-control">
+                                    <span className="label-text mb-1 font-semibold">Campus</span>
+                                    <input
+                                        className="input input-bordered"
+                                        value={form.campus}
+                                        onChange={event => setForm({ ...form, campus: event.target.value })}
+                                        placeholder="Main Campus"
+                                    />
+                                </label>
+                                <label className="form-control">
+                                    <span className="label-text mb-1 font-semibold">Building / location</span>
+                                    <input
+                                        className="input input-bordered"
+                                        value={form.building}
+                                        onChange={event => setForm({ ...form, building: event.target.value, location: event.target.value })}
+                                        placeholder="Sports Complex"
+                                    />
+                                </label>
+                                <label className="form-control">
+                                    <span className="label-text mb-1 font-semibold">Address</span>
+                                    <input
+                                        className="input input-bordered"
+                                        value={form.address}
+                                        onChange={event => setForm({ ...form, address: event.target.value })}
+                                        placeholder="Lucena City"
+                                    />
+                                </label>
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <label className="form-control">
+                                    <span className="label-text mb-1 font-semibold">Venue type</span>
+                                    <select
+                                        className="select select-bordered"
+                                        value={form.is_indoor ? 'indoor' : 'outdoor'}
+                                        onChange={event => setForm({ ...form, is_indoor: event.target.value === 'indoor' })}
+                                    >
+                                        <option value="indoor">Indoor</option>
+                                        <option value="outdoor">Outdoor</option>
+                                    </select>
+                                </label>
+                                <label className="form-control">
+                                    <span className="label-text mb-1 font-semibold">Status</span>
+                                    <select
+                                        className="select select-bordered"
+                                        value={form.is_active ? 'active' : 'inactive'}
+                                        onChange={event => setForm({ ...form, is_active: event.target.value === 'active' })}
+                                    >
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <label className="form-control">
+                                <span className="label-text mb-1 font-semibold">Address or notes</span>
+                                <textarea
+                                    className="textarea textarea-bordered min-h-24"
+                                    value={form.notes}
+                                    onChange={event => setForm({ ...form, notes: event.target.value })}
+                                    placeholder="Operational notes, access instructions, or setup details"
+                                />
+                            </label>
+
+                            <div className="rounded-md border border-dashed border-base-300 bg-base-200 p-3 text-sm text-gray-600">
+                                Venue areas such as Court A, Table Tennis Area, or Esports Room A can be managed from this venue record in the next increment.
+                            </div>
+
+                            <div className="modal-action">
+                                <button type="button" className="btn btn-ghost" onClick={closeModal}>
+                                    Cancel
+                                </button>
+                                <button className="btn bg-maroon text-white hover:bg-maroon-dark" disabled={createVenue.isPending}>
+                                    {createVenue.isPending ? 'Saving...' : 'Save Venue'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <button className="modal-backdrop" onClick={closeModal}>Close</button>
+                </div>
+            )}
         </SectionShell>
     );
 }
@@ -120,7 +297,7 @@ export function CategoriesPage() {
     const { data: categories, isLoading } = useEventCategories();
 
     return (
-        <SectionShell title="Event Categories" actionLabel="Add Category">
+        <SectionShell title="Event Categories">
             <TableState isLoading={isLoading} isEmpty={!categories?.length}>
                 <table className="table">
                     <thead>
@@ -155,7 +332,7 @@ export function EventsPage() {
     const rows = (events || []).filter(event => status === 'all' || event.status === status);
 
     return (
-        <SectionShell title="Events" actionLabel="Create Event">
+        <SectionShell title="Events">
             <FilterRow>
                 <select className="select select-bordered select-sm" value={status} onChange={event => setStatus(event.target.value)}>
                     <option value="all">All statuses</option>
@@ -202,7 +379,7 @@ export function SchedulesAdminPage() {
     const rows = (schedules || []).filter(schedule => status === 'all' || schedule.event_status === status);
 
     return (
-        <SectionShell title="Schedules" actionLabel="Add Schedule">
+        <SectionShell title="Schedules">
             <FilterRow>
                 <select className="select select-bordered select-sm" value={status} onChange={event => setStatus(event.target.value)}>
                     <option value="all">All statuses</option>
@@ -277,7 +454,12 @@ export function RegistrationsAdminPage() {
                             {rows.map(reg => (
                                 <tr key={reg.id} className="cursor-pointer hover" onClick={() => setSelected(reg)}>
                                     <td className="font-semibold">{reg.schedule_event_name}</td>
-                                    <td>{reg.department_name}</td>
+                                    <td>
+                                        <div className="flex items-center gap-3">
+                                            <DepartmentLogo acronym={reg.department_acronym} name={reg.department_name} className="h-8 w-8" />
+                                            <span>{reg.department_name}</span>
+                                        </div>
+                                    </td>
                                     <td>{formatDate(reg.created_at)}</td>
                                     <td><StatusChip status={reg.status} /></td>
                                     <td>{reg.roster?.length || 0}</td>
@@ -338,7 +520,7 @@ export function ParticipantsAdminPage() {
     const rows = (athletes || []).filter(athlete => department === 'all' || String(athlete.department) === department);
 
     return (
-        <SectionShell title="Participants" actionLabel="Add Participant">
+        <SectionShell title="Participants">
             <FilterRow>
                 <select className="select select-bordered select-sm" value={department} onChange={event => setDepartment(event.target.value)}>
                     <option value="all">All departments</option>
@@ -365,7 +547,12 @@ export function ParticipantsAdminPage() {
                                 <tr key={athlete.id}>
                                     <td className="font-mono text-xs">{athlete.student_number}</td>
                                     <td className="font-semibold">{athlete.full_name}</td>
-                                    <td>{dept?.name || athlete.department}</td>
+                                    <td>
+                                        <div className="flex items-center gap-3">
+                                            <DepartmentLogo acronym={dept?.acronym} name={dept?.name || String(athlete.department)} className="h-8 w-8" />
+                                            <span>{dept?.name || athlete.department}</span>
+                                        </div>
+                                    </td>
                                     <td>{athlete.program_course}</td>
                                     <td>{athlete.year_level}</td>
                                     <td><StatusChip status={athlete.medical_cleared ? 'cleared' : 'pending'} /></td>
@@ -385,39 +572,21 @@ export function ResultsEntryPage() {
     const { data: matches } = useMatchResults();
     const { data: podiums } = usePodiumResults();
     const competitiveSchedules = schedules?.filter(schedule => !schedule.is_program_event) || [];
+    const matchSchedules = competitiveSchedules.filter(item => item.result_family === 'match_based');
+    const rankSchedules = competitiveSchedules.filter(item => item.result_family === 'rank_based');
 
     return (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <SectionShell title="Results Entry" actionLabel="Finalize Result">
+            <SectionShell title="Results Entry">
+                <div className="alert mb-4 border-warning/30 bg-warning/10 text-charcoal">
+                    Official result write actions are hidden until the finalization workflow is fully connected. This view shows the schedules that need result processing and the latest recorded results.
+                </div>
                 <div className="grid gap-4 lg:grid-cols-2">
-                    <FormCard title="Match-Based Result" icon={<Swords className="h-5 w-5" />}>
-                        <select className="select select-bordered w-full">
-                            <option>Select match schedule</option>
-                            {competitiveSchedules.filter(item => item.result_family === 'match_based').map(schedule => (
-                                <option key={schedule.id}>{schedule.event_name}</option>
-                            ))}
-                        </select>
-                        <div className="grid grid-cols-2 gap-3">
-                            <input className="input input-bordered" placeholder="Score A" type="number" />
-                            <input className="input input-bordered" placeholder="Score B" type="number" />
-                        </div>
-                        <select className="select select-bordered w-full">
-                            <option>normal</option>
-                            <option>forfeit</option>
-                            <option>walkover</option>
-                            <option>disqualification</option>
-                        </select>
+                    <FormCard title="Match-Based Queue" icon={<Swords className="h-5 w-5" />}>
+                        <ResultScheduleList schedules={matchSchedules} />
                     </FormCard>
-                    <FormCard title="Rank-Based Result" icon={<Medal className="h-5 w-5" />}>
-                        <select className="select select-bordered w-full">
-                            <option>Select ranking schedule</option>
-                            {competitiveSchedules.filter(item => item.result_family === 'rank_based').map(schedule => (
-                                <option key={schedule.id}>{schedule.event_name}</option>
-                            ))}
-                        </select>
-                        <input className="input input-bordered" placeholder="Gold department" />
-                        <input className="input input-bordered" placeholder="Silver department" />
-                        <input className="input input-bordered" placeholder="Bronze department" />
+                    <FormCard title="Rank-Based Queue" icon={<Medal className="h-5 w-5" />}>
+                        <ResultScheduleList schedules={rankSchedules} />
                     </FormCard>
                 </div>
             </SectionShell>
@@ -433,11 +602,34 @@ export function ResultsEntryPage() {
                     {podiums?.slice(0, 3).map(podium => (
                         <div key={`podium-${podium.id}`} className="rounded-md bg-base-200 p-3">
                             <div className="font-semibold">{podium.event_name}</div>
-                            <div>Rank {podium.rank}: {podium.department_name}</div>
+                            <div className="mt-2 flex items-center gap-2">
+                                <DepartmentLogo acronym={podium.department_acronym} name={podium.department_name} className="h-7 w-7" />
+                                <span>Rank {podium.rank}: {podium.department_name}</span>
+                            </div>
                         </div>
                     ))}
                 </div>
             </aside>
+        </div>
+    );
+}
+
+function ResultScheduleList({ schedules }: { schedules: EventSchedule[] }) {
+    if (!schedules.length) {
+        return <p className="rounded-md border border-dashed border-base-300 p-4 text-sm text-gray-600">No schedules in this result mode yet.</p>;
+    }
+
+    return (
+        <div className="space-y-2">
+            {schedules.slice(0, 6).map(schedule => (
+                <div key={schedule.id} className="rounded-md bg-base-200 p-3">
+                    <div className="font-semibold text-charcoal">{schedule.event_name}</div>
+                    <div className="text-xs text-gray-600">
+                        {formatDate(schedule.scheduled_start)} {schedule.venue_name ? `at ${schedule.venue_name}` : ''}
+                    </div>
+                    <StatusChip status={schedule.event_status} />
+                </div>
+            ))}
         </div>
     );
 }
@@ -588,7 +780,7 @@ export function NewsPage() {
 
     return (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
-            <SectionShell title="News Management" actionLabel="Create Article" searchValue={query} onSearch={setQuery}>
+            <SectionShell title="News Management" searchValue={query} onSearch={setQuery}>
                 {isError && <div className="alert alert-warning mb-4">Unable to load official news articles right now.</div>}
                 <FilterRow>
                     <select className="select select-sm select-bordered" value={status} onChange={event => setStatus(event.target.value as 'all' | NewsArticle['status'])}>
@@ -641,7 +833,14 @@ export function NewsPage() {
                                     <td><NewsStatusChip status={article.status} /></td>
                                     <td>{article.ai_generated ? <StatusChip status="verified" /> : '-'}</td>
                                     <td className="text-sm">{article.event_name || '-'}</td>
-                                    <td className="text-sm">{article.department_name || '-'}</td>
+                                    <td className="text-sm">
+                                        {article.department_name ? (
+                                            <div className="flex items-center gap-2">
+                                                <DepartmentLogo name={article.department_name} className="h-7 w-7" />
+                                                <span>{article.department_name}</span>
+                                            </div>
+                                        ) : '-'}
+                                    </td>
                                     <td>{formatDate(article.published_at)}</td>
                                     <td>{formatDate(article.updated_at)}</td>
                                 </tr>
@@ -811,7 +1010,7 @@ export function AiRecapsPage() {
 
     return (
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
-            <SectionShell title="AI Recap Review" actionLabel="Generate Draft" searchValue={query} onSearch={setQuery}>
+            <SectionShell title="AI Recap Review" searchValue={query} onSearch={setQuery}>
                 {isError && <div className="alert alert-warning mb-4">Unable to load AI recap drafts right now.</div>}
                 <FilterRow>
                     <select className="select select-sm select-bordered" value={status} onChange={event => setStatus(event.target.value as 'all' | AIRecap['status'])}>
@@ -869,7 +1068,14 @@ export function AiRecapsPage() {
                                         <div className="line-clamp-1 text-xs text-gray-600">{recap.generated_summary}</div>
                                     </td>
                                     <td>{labelize(recap.trigger_type)}</td>
-                                    <td>{recap.event_name || recap.department_name || 'Campus-wide'}</td>
+                                    <td>
+                                        {recap.department_name ? (
+                                            <div className="flex items-center gap-2">
+                                                <DepartmentLogo name={recap.department_name} className="h-7 w-7" />
+                                                <span>{recap.event_name || recap.department_name}</span>
+                                            </div>
+                                        ) : recap.event_name || 'Campus-wide'}
+                                    </td>
                                     <td><RecapStatusChip status={recap.status} /></td>
                                     <td>{formatDate(recap.generated_at)}</td>
                                     <td>{formatDate(recap.reviewed_at)}</td>
@@ -998,7 +1204,7 @@ function MedalTable({ title, showCards }: { title: string; showCards: boolean })
     const top3 = tally?.slice(0, 3) || [];
 
     return (
-        <SectionShell title={title} actionLabel="Recompute Standings">
+        <SectionShell title={title}>
             <div className="alert mb-4 border-maroon/20 bg-maroon/5 text-charcoal">
                 Official rank follows gold medals first, then silver, then bronze. Department name is only a final stable sort.
             </div>
@@ -1006,8 +1212,13 @@ function MedalTable({ title, showCards }: { title: string; showCards: boolean })
                 <div className="mb-5 grid gap-4 md:grid-cols-3">
                     {top3.map((row, index) => (
                         <div key={row.id} className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
-                            <div className="text-sm font-bold text-maroon">Rank {index + 1}</div>
-                            <div className="mt-1 text-lg font-black">{row.department_name}</div>
+                            <div className="flex items-center gap-3">
+                                <DepartmentLogo acronym={row.department_acronym} name={row.department_name} className={index === 0 ? 'h-14 w-14' : 'h-12 w-12'} />
+                                <div>
+                                    <div className="text-sm font-bold text-maroon">Rank {index + 1}</div>
+                                    <div className="mt-1 text-lg font-black">{row.department_name}</div>
+                                </div>
+                            </div>
                             <div className="mt-3 flex gap-4 text-sm">
                                 <span>G {row.gold}</span>
                                 <span>S {row.silver}</span>
@@ -1034,7 +1245,12 @@ function MedalTable({ title, showCards }: { title: string; showCards: boolean })
                         {tally?.map((row, index) => (
                             <tr key={row.id}>
                                 <td className="font-black">{index + 1}</td>
-                                <td className="font-semibold">{row.department_name}</td>
+                                <td>
+                                    <div className="flex items-center gap-3">
+                                        <DepartmentLogo acronym={row.department_acronym} name={row.department_name} className="h-8 w-8" />
+                                        <span className="font-semibold">{row.department_name}</span>
+                                    </div>
+                                </td>
                                 <td className="font-bold text-gold">{row.gold}</td>
                                 <td>{row.silver}</td>
                                 <td>{row.bronze}</td>
@@ -1051,13 +1267,11 @@ function MedalTable({ title, showCards }: { title: string; showCards: boolean })
 
 function SectionShell({
     title,
-    actionLabel,
     searchValue,
     onSearch,
     children,
 }: {
     title: string;
-    actionLabel?: string;
     searchValue?: string;
     onSearch?: (value: string) => void;
     children: ReactNode;
@@ -1076,7 +1290,6 @@ function SectionShell({
                             <input value={searchValue} onChange={event => onSearch(event.target.value)} placeholder="Search" />
                         </label>
                     )}
-                    {actionLabel && <button className="btn btn-sm bg-maroon text-white hover:bg-maroon-dark">{actionLabel}</button>}
                 </div>
             </div>
             {children}
