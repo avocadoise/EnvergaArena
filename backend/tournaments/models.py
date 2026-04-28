@@ -34,6 +34,87 @@ class Athlete(models.Model):
         return f"{self.full_name} ({self.student_number})"
 
 
+class EmailVerificationCode(models.Model):
+    """Hashed OTP metadata for public tryout application email verification."""
+    email = models.EmailField()
+    student_number = models.CharField(max_length=50)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='tryout_email_codes')
+    schedule = models.ForeignKey(EventSchedule, on_delete=models.CASCADE, related_name='tryout_email_codes')
+    code_hash = models.CharField(max_length=255)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    request_ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['email', 'student_number', 'department', 'schedule']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.email} - {self.schedule.event.name}"
+
+
+class TryoutApplication(models.Model):
+    """Verified public tryout application reviewed by one department representative."""
+    STATUS_CHOICES = [
+        ('submitted', 'Submitted'),
+        ('under_review', 'Under Review'),
+        ('selected', 'Selected'),
+        ('not_selected', 'Not Selected'),
+        ('waitlisted', 'Waitlisted'),
+        ('withdrawn', 'Withdrawn'),
+    ]
+
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='tryout_applications')
+    schedule = models.ForeignKey(EventSchedule, on_delete=models.CASCADE, related_name='tryout_applications')
+    student_number = models.CharField(max_length=50)
+    full_name = models.CharField(max_length=255)
+    school_email = models.EmailField()
+    contact_number = models.CharField(max_length=30, blank=True)
+    program_course = models.CharField(max_length=100)
+    year_level = models.CharField(max_length=20)
+    prior_experience = models.TextField(blank=True)
+    notes = models.TextField(blank=True)
+    email_verified = models.BooleanField(default=False)
+    verification_code = models.CharField(max_length=12, blank=True)
+    verification_sent_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='submitted')
+    review_notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        'auth.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_tryout_applications',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    converted_athlete = models.OneToOneField(
+        Athlete,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='source_tryout_application',
+    )
+    created_ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        unique_together = ('school_email', 'schedule')
+
+    def __str__(self):
+        return f"{self.full_name} - {self.department.acronym} {self.schedule.event.name}"
+
+
 class EventRegistration(models.Model):
     """A department's submission to compete in a specific EventSchedule."""
     STATUS_CHOICES = [
@@ -134,7 +215,6 @@ class PodiumResult(models.Model):
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name='podium_placements')
     rank = models.PositiveSmallIntegerField()
     medal = models.CharField(max_length=10, choices=MEDAL_CHOICES, default='none')
-    points_awarded = models.IntegerField(default=0)
     is_final = models.BooleanField(default=False, help_text="True = determines medals")
     recorded_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -199,7 +279,6 @@ class MedalTally(models.Model):
     gold = models.IntegerField(default=0)
     silver = models.IntegerField(default=0)
     bronze = models.IntegerField(default=0)
-    total_points = models.IntegerField(default=0)
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -209,5 +288,5 @@ class MedalTally(models.Model):
     def __str__(self):
         return (
             f"{self.department.acronym}: "
-            f"G{self.gold} S{self.silver} B{self.bronze} Pts{self.total_points}"
+            f"G{self.gold} S{self.silver} B{self.bronze}"
         )
