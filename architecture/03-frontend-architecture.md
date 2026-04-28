@@ -2,30 +2,39 @@
 
 ## Frontend Stack
 
-- React 19 + TypeScript
+- React 19 + TypeScript 6
 - Vite 8 build tooling
 - React Router DOM 7
-- React Query 5
+- TanStack React Query 5
 - Axios
-- Tailwind CSS v4 + DaisyUI
-- date-fns + lucide-react for formatting and icons
+- Tailwind CSS v4 + DaisyUI 5
+- date-fns
+- lucide-react
+- jwt-decode
 
 ## Entry and Composition
 
-- `frontend/src/main.tsx` mounts app under React `StrictMode`.
+- `frontend/src/main.tsx` mounts the app.
 - `frontend/src/App.tsx` wires:
   - `QueryClientProvider`
   - `AuthProvider`
   - `BrowserRouter`
-  - route tree and protected routes
+  - public and protected route trees
 
 ## Layout Architecture
 
-`MainLayout` provides shared shell:
+`MainLayout` provides the public shell:
 
-- sticky top navigation (`Navbar`)
-- centered content container
+- public navigation
+- centered page container
 - footer
+
+`OperationsLayout` provides the protected admin/representative shell:
+
+- left sidebar navigation
+- top bar
+- role-aware menu items
+- department logo display where appropriate
 
 Global design tokens are defined in `frontend/src/index.css` using Tailwind v4 `@theme` variables and DaisyUI color primitives.
 
@@ -34,97 +43,169 @@ Global design tokens are defined in `frontend/src/index.css` using Tailwind v4 `
 ### Public Routes
 
 - `/`
+- `/news`
+- `/news/:slug`
 - `/schedules`
 - `/results`
 - `/rooney`
+- `/tryouts`
 - `/login`
 
-### Protected Routes
+### Admin Routes
 
-Wrapped by `ProtectedRoute`:
+Protected by `ProtectedRoute allowedRoles={['admin']}`:
 
 - `/admin`
-- `/admin/masterlist`
+- `/admin/departments`
+- `/admin/venues`
+- `/admin/categories`
+- `/admin/events`
+- `/admin/schedules`
+- `/admin/registrations`
+- `/admin/participants`
+- `/admin/results-entry`
+- `/admin/medal-tally`
+- `/admin/leaderboard`
+- `/admin/news`
+- `/admin/ai-recaps`
+- `/admin/rooney-logs`
+- `/admin/settings`
 
-Authorized roles:
+### Department Representative Routes
 
-- `admin`
-- `department_rep`
+Protected by `ProtectedRoute allowedRoles={['department_rep']}`:
 
-Unauthenticated users are redirected to login with return path state.
+- `/portal`
+- `/portal/summary`
+- `/portal/tryouts`
+- `/portal/selected-applicants`
+- `/portal/masterlist`
+- `/portal/events`
+- `/portal/registrations`
+- `/portal/rosters`
+- `/portal/registration-status`
+- `/portal/schedules`
+- `/portal/results`
+- `/portal/medals`
+- `/portal/news`
+- `/portal/rooney`
 
 ## Authentication Architecture
 
-## Token Storage
+### Token Storage
 
-`frontend/src/services/auth.ts` stores access/refresh JWT tokens in `localStorage`.
+`frontend/src/services/auth.ts` stores the access token in runtime memory only.
 
-## Session Context
+It does not persist active tokens in:
+
+- `localStorage`
+- `sessionStorage`
+- IndexedDB
+- frontend-readable cookies
+
+It clears legacy local/session storage keys left by older auth implementations.
+
+### Refresh Session Persistence
+
+The refresh token is owned by the backend as an HttpOnly cookie. The frontend cannot read it.
+
+`AuthProvider` restores auth on app startup by calling `refreshAccessToken()`, which posts to `/auth/refresh/` with `withCredentials: true`.
+
+### Session Context
 
 `AuthContext`:
 
-- decodes access token on app load
-- exposes `user`, `isAuthenticated`, `loginState`, `logoutState`
-- user payload includes role and department claims
+- exposes `user`, `isAuthenticated`, `loginState`, `logoutState`, and `isLoading`
+- decodes access token claims with `jwt-decode`
+- waits for refresh/session restore before protected routes make redirect decisions
 
-## API Client and Interceptors
+### API Client and Interceptors
 
 `frontend/src/services/api.ts`:
 
-- sets API base URL from `VITE_API_URL` with fallback `http://localhost:8000/api`
-- request interceptor attaches bearer token
-- response interceptor attempts refresh token flow on `401`
-- failed refresh clears tokens
+- uses `VITE_API_URL` with fallback `http://localhost:8000/api`
+- sets `withCredentials: true`
+- attaches the in-memory access token as `Authorization: Bearer <token>`
+- on a 401, attempts one cookie-backed refresh
+- retries the original request once after refresh
+- clears auth state when refresh fails
 
 ## Data Fetching and Caching
 
-## React Query Hooks
+### Public Data Hooks
 
-`usePublicData.ts`:
+`usePublicData.ts` covers:
 
 - schedules
 - match results
 - podium results
 - medal tally
+- published news list/detail
 
-`useAdminData.ts`:
+### Admin/Protected Data Hooks
 
-- athlete query and create mutation
-- registration query and create mutation
-- registration status update mutation
+`useAdminData.ts` covers:
 
-Mutations invalidate related query keys to synchronize UI state.
+- departments
+- venues
+- event categories
+- events
+- schedules
+- athletes
+- tryout applications
+- registrations
+- Rooney logs
+- admin news
+- AI recaps
+
+Mutations invalidate related React Query keys to refresh pages after create/update/review/finalize/publish operations.
 
 ## Page Responsibility Map
 
 | Route | Component | Responsibility |
 | --- | --- | --- |
-| `/` | `Home` | landing hero and top-3 leaderboard widget |
-| `/schedules` | `Schedules` | schedule cards with participant badges |
-| `/results` | `Results` | medal tally and recent results tabs |
-| `/rooney` | `Rooney` | chat-style Rooney interaction with source labels |
-| `/login` | `Login` | JWT login and redirect |
-| `/admin` | `Dashboard` | admin approval queue and department submission flow |
-| `/admin/masterlist` | `Masterlist` | department athlete CRUD create/list workflow |
+| `/` | `Home` | hero, public CTAs, top-3 leaderboard, latest news |
+| `/news` | `News` | published public news list and filters |
+| `/news/:slug` | `NewsArticlePage` | full published article page |
+| `/schedules` | `Schedules` | public schedule cards |
+| `/results` | `Results` | public medal tally, leaderboard, match/podium results |
+| `/rooney` | `Rooney` | public grounded Rooney assistant |
+| `/tryouts` | `TryoutApply` | public verified student tryout application flow |
+| `/login` | `Login` | admin/rep login |
+| `/admin` | `Dashboard` | admin KPIs, approvals, snapshots, quick actions |
+| `/admin/events` | `EventsPage` | event management with create/edit/archive |
+| `/admin/schedules` | `SchedulesAdminPage` | schedule slot management with venue conflict awareness |
+| `/admin/news` | `NewsPage` | official article management |
+| `/admin/ai-recaps` | `AiRecapsPage` | recap review desk and publish-to-news |
+| `/portal` | `Dashboard` | representative department command center |
+| `/portal/tryouts` | `TryoutApplicationsPage` | department-scoped tryout review |
+| `/portal/rosters` | `RosterBuilderPage` | roster assignment from department participants |
 
 ## Role-Driven UX Behavior
 
 ### Admin
 
-- sees pending/submitted registrations
-- can approve or request revision with notes
+- manages global operational data
+- reviews registrations
+- updates schedules, events, results, news, AI recaps
+- can open public site from dashboard in a new tab
 
 ### Department Representative
 
-- manages own athlete masterlist
-- submits registrations for available schedules
-- tracks status and admin feedback
+- sees one department only
+- reviews verified tryout applications for that department
+- converts selected applicants to participants
+- builds rosters and submits registrations
+- reads public news and opens Rooney
+- can open public site from dashboard in a new tab
 
 ### Public
 
-- can browse schedules, results, and Rooney assistant without login
+- can browse schedules, results, medal tally, leaderboard, news, and Rooney
+- can submit verified tryout applications
+- cannot see private admin or department workflow data
 
-## Rooney Frontend Integration
+## Rooney and AI Recap Frontend Integration
 
 `Rooney.tsx` posts to `/public/rooney/query/` and renders:
 
@@ -132,19 +213,33 @@ Mutations invalidate related query keys to synchronize UI state.
 - refusal reason when ungrounded
 - source labels as chips
 
-This design surfaces explainability and trust context to end users.
+Admin AI recap pages call `/admin/ai-recaps/` to:
+
+- list drafts
+- generate a draft
+- edit generated copy
+- approve/discard
+- publish as official news
 
 ## Frontend State Model
 
 - server state: React Query cache
-- auth state: React Context + JWT decode
-- local UI state: component state for forms, tabs, and chat input
+- auth state: React Context + in-memory access token
+- local UI state: component state for modals, forms, filters, drawers, and chat input
 
 ## Build and Deployment Model
 
-- `npm run dev` for local development with Vite dev server
-- `npm run build` creates production static assets
-- frontend currently assumes backend URL through environment variable
+- `npm run dev` for local Vite development
+- `npm run lint` for ESLint
+- `npm run build` for TypeScript build and Vite production bundle
+- `npm run preview` for local static preview
+
+Safe frontend env variables:
+
+- `VITE_API_URL`
+- `VITE_TURNSTILE_SITE_KEY`
+
+No frontend env variable should contain JWT secrets, refresh tokens, API keys, or server-side credentials.
 
 ## Component Interaction Diagram
 
@@ -157,14 +252,16 @@ flowchart TD
 
     F[AuthContext] --> A
     F --> D
+    F --> G[In-Memory Access Token]
+    D --> H[HttpOnly Refresh Cookie via Browser]
 
-    G[React Query Cache] --> C
-    C --> G
+    I[React Query Cache] --> C
+    C --> I
 ```
 
 ## Frontend Architectural Risks
 
-1. JWT in localStorage is vulnerable to XSS token theft if XSS is introduced.
-2. No centralized error boundary strategy for app-level fallback UX.
-3. `App.css` contains template leftovers and does not appear to be actively used.
-4. Route protection is frontend-enforced for UX, but true security depends on backend permission correctness.
+1. No centralized error boundary strategy for app-level fallback UX.
+2. Frontend route protection is UX-only; backend permission correctness remains the true security boundary.
+3. No frontend test runner/scripts are currently committed.
+4. Large bundle warnings appear during Vite production build and should eventually be addressed with code splitting.
