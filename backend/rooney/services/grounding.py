@@ -1,33 +1,22 @@
 """
-grounding.py — Fetches live system data and builds a grounding context string
-for Rooney. This context is injected into the LLM system prompt so the AI
-can only answer from real data.
+Fetch live structured data and build Rooney's grounding context.
 """
+from datetime import timedelta
+
 from django.utils import timezone
-from tournaments.models import MedalTally, EventSchedule, MatchResult, PodiumResult
+
+from core.models import NewsArticle
+from tournaments.models import EventSchedule, MatchResult, MedalTally, PodiumResult
 
 
 def build_grounding_context() -> dict:
-    """
-    Returns a dict with:
-        - text: plain-text grounding context string
-        - source_labels: list of source names used
-    """
     lines = []
     source_labels = []
     today = timezone.localdate()
 
-    # 1. Medal Tally (top 8)
-    tally = sorted(
-        MedalTally.objects.select_related('department'),
-        key=lambda row: (
-            -row.gold,
-            -row.silver,
-            -row.bronze,
-            -(row.gold + row.silver + row.bronze),
-            row.department.name,
-        )
-    )[:8]
+    tally = list(
+        MedalTally.objects.select_related('department').order_by('-gold', '-silver', '-bronze', 'department__name')[:8]
+    )
     if tally:
         source_labels.append('official_medal_tally')
         lines.append("=== CURRENT MEDAL TALLY (Rank: Gold, then Silver, then Bronze) ===")
@@ -35,11 +24,9 @@ def build_grounding_context() -> dict:
             total_medals = row.gold + row.silver + row.bronze
             lines.append(
                 f"  #{rank}. {row.department.name} ({row.department.acronym}): "
-                f"G{row.gold} S{row.silver} B{row.bronze} | "
-                f"{total_medals} medals | {row.total_points} pts"
+                f"G{row.gold} S{row.silver} B{row.bronze} | {total_medals} medals"
             )
 
-    # 2. Today's schedules
     todays_schedules = (
         EventSchedule.objects
         .select_related('event', 'venue', 'venue_area')
@@ -47,34 +34,31 @@ def build_grounding_context() -> dict:
         .order_by('scheduled_start')
     )
     if todays_schedules:
-        source_labels.append('Today\'s Schedule')
+        source_labels.append("Today's Schedule")
         lines.append(f"\n=== TODAY'S EVENTS ({today}) ===")
-        for sched in todays_schedules:
-            venue_str = sched.venue.name if sched.venue else 'TBA'
-            area_str = f" / {sched.venue_area.name}" if sched.venue_area else ''
-            time_str = sched.scheduled_start.strftime('%I:%M %p') if sched.scheduled_start else 'TBA'
-            lines.append(f"  - {sched.event.name} at {time_str} | {venue_str}{area_str}")
+        for schedule in todays_schedules:
+            venue_name = schedule.venue.name if schedule.venue else 'TBA'
+            area_name = f" / {schedule.venue_area.name}" if schedule.venue_area else ''
+            time_value = schedule.scheduled_start.strftime('%I:%M %p') if schedule.scheduled_start else 'TBA'
+            lines.append(f"  - {schedule.event.name} at {time_value} | {venue_name}{area_name}")
 
-    # 3. Upcoming schedules (next 3 days, excluding today)
-    from datetime import timedelta
     upcoming = (
         EventSchedule.objects
         .select_related('event', 'venue')
         .filter(
             scheduled_start__date__gt=today,
-            scheduled_start__date__lte=today + timedelta(days=3)
+            scheduled_start__date__lte=today + timedelta(days=3),
         )
         .order_by('scheduled_start')[:10]
     )
     if upcoming:
         source_labels.append('Upcoming Schedule')
         lines.append("\n=== UPCOMING EVENTS (Next 3 Days) ===")
-        for sched in upcoming:
-            date_str = sched.scheduled_start.strftime('%a, %b %d') if sched.scheduled_start else 'TBA'
-            venue_str = sched.venue.name if sched.venue else 'TBA'
-            lines.append(f"  - {sched.event.name} on {date_str} | {venue_str}")
+        for schedule in upcoming:
+            date_value = schedule.scheduled_start.strftime('%a, %b %d') if schedule.scheduled_start else 'TBA'
+            venue_name = schedule.venue.name if schedule.venue else 'TBA'
+            lines.append(f"  - {schedule.event.name} on {date_value} | {venue_name}")
 
-    # 4. Recent final match results (last 5)
     recent_matches = (
         MatchResult.objects
         .select_related('schedule__event', 'home_department', 'away_department', 'winner')
@@ -85,14 +69,13 @@ def build_grounding_context() -> dict:
         source_labels.append('Match Results')
         lines.append("\n=== RECENT MATCH RESULTS (Final) ===")
         for match in recent_matches:
-            winner_str = f" | Winner: {match.winner.name}" if match.winner else (" | Draw" if match.is_draw else "")
+            winner_text = f" | Winner: {match.winner.name}" if match.winner else (" | Draw" if match.is_draw else "")
             lines.append(
                 f"  - {match.schedule.event.name}: "
                 f"{match.home_department.acronym} {match.home_score} - "
-                f"{match.away_score} {match.away_department.acronym}{winner_str}"
+                f"{match.away_score} {match.away_department.acronym}{winner_text}"
             )
 
-    # 5. Recent final podium results (last 5)
     recent_podiums = (
         PodiumResult.objects
         .select_related('schedule__event', 'department')
@@ -105,12 +88,25 @@ def build_grounding_context() -> dict:
         for podium in recent_podiums:
             lines.append(
                 f"  - {podium.schedule.event.name}: "
-                f"Rank {podium.rank} → {podium.department.name} ({podium.medal.upper()})"
+                f"Rank {podium.rank} -> {podium.department.name} ({podium.medal.upper()})"
             )
 
-    context_text = "\n".join(lines) if lines else "No live data available at this time."
+    published_news = (
+        NewsArticle.objects
+        .select_related('event', 'department')
+        .filter(status='published')
+        .order_by('-published_at', '-updated_at')[:5]
+    )
+    if published_news:
+        source_labels.append('Published News')
+        lines.append("\n=== LATEST OFFICIAL NEWS ===")
+        for article in published_news:
+            scope = article.event.name if article.event else (article.department.name if article.department else 'General')
+            lines.append(
+                f"  - {article.title} [{article.get_article_type_display()}] | Scope: {scope} | Summary: {article.summary}"
+            )
 
     return {
-        "text": context_text,
-        "source_labels": source_labels,
+        'text': "\n".join(lines) if lines else 'No live data available at this time.',
+        'source_labels': source_labels,
     }
