@@ -4,125 +4,171 @@
 
 ## Identity and Access
 
-Implemented controls and authentication flow:
+### Token Generation
 
-### 1. Token Generation (Backend)
-- Uses **JWT-based authentication** via `djangorestframework-simplejwt`.
-- The login endpoint (`/api/auth/login/`) uses a `CustomTokenObtainPairSerializer`.
-- **Custom Claims**: The access token payload is enriched with the user's `username`, `role` (`admin` or `department_rep`), and department metadata (`department_id`, `department_name`, `department_acronym`). This removes the need for a separate `/me` endpoint on the frontend to fetch user metadata.
-- View-level permission classes (e.g., `IsAdminUser`, `IsAdminOrReadOnly`) guard protected write operations based on the actor's logged-in identity.
-- Queryset scoping dynamically restricts `department_rep` visibility, ensuring they only see their own department's athletes and registrations.
+- The backend uses `djangorestframework-simplejwt`.
+- `POST /api/auth/login/` uses `CustomTokenObtainPairSerializer`.
+- Access token claims include username, role, and department metadata.
+- The login response returns an access token only.
+- The refresh token is set in a backend-issued HttpOnly cookie.
 
-### 2. Token Storage and Session State (Frontend)
-- **Local Storage**: `access` and `refresh` tokens are persisted securely in browser `localStorage` to survive window reloads (`src/services/auth.ts`).
-- **Auth Context**: `AuthContext.tsx` uses `jwt-decode` to read the custom JWT claims locally. It provides the application with a `user` object containing the `role` and `department_id` without requiring an additional network round-trip.
-- **Cross-Tab Sync**: Storage event listeners ensure that logging in or out in one tab instantly propagates the authentication state across all open application instances.
+### Token Storage and Session State
 
-### 3. API Interceptors & Auto-Refresh
-- All outbound requests to the backend pass through an Axios interceptor (`src/services/api.ts`) that automatically attaches `Authorization: Bearer <access_token>`.
-- If an API request returns a `401 Unauthorized` due to token expiration, a response interceptor catches the failure, calls `/api/auth/refresh/` using the refresh token, updates the tokens, and transparently retries the original failed request.
-- If the refresh token is also expired or invalid, the interceptor clears the tokens and drops the session.
+- Access token is stored in memory only in `frontend/src/services/auth.ts`.
+- Refresh token is not accessible to frontend JavaScript.
+- Legacy localStorage/sessionStorage token keys are cleared on auth changes and app startup.
+- `AuthProvider` restores sessions after reload by calling `/api/auth/refresh/`.
 
-### 4. Route Protection
-- Frontend routing utilizes a `ProtectedRoute.tsx` wrapper.
-- Routes define `allowedRoles` (e.g., `['admin']` or `['department_rep']`). If the decoded token role doesn't match the required role, the router intercepts the navigation and bounces the user to their designated role portal (or login).
+### API Interceptors and Auto-Refresh
+
+- Axios attaches the in-memory access token to protected requests.
+- `withCredentials: true` allows the browser to send the HttpOnly refresh cookie.
+- On one `401`, the client calls `/api/auth/refresh/` and retries the original request.
+- Refresh failure clears in-memory auth state.
+
+### Logout
+
+- `POST /api/auth/logout/` clears the refresh cookie.
+- Frontend logout clears the in-memory access token and user state.
+
+### Route Protection
+
+- `ProtectedRoute.tsx` gates admin and department representative route groups.
+- Protected routes wait for auth rehydration before redirecting.
+- Backend permissions and queryset scoping remain the true security boundary.
+
+## Authorization Controls
+
+- Admin endpoints use staff/superuser checks.
+- Department representative data is scoped by `UserProfile.department`.
+- Representatives can only see their own tryout applications, athletes, registrations, and rosters.
+- Public endpoints expose schedules, results, medal tally, leaderboard, published news, and Rooney only.
+- Raw AI recaps, article drafts, admin notes, and private workflow details are not public.
+
+## Public Tryout Safety Controls
+
+- Students do not receive accounts.
+- Public tryout email must end in `@student.mseuf.edu.ph`.
+- Turnstile is verified server-side before OTP issuance.
+- OTP values are hashed before storage.
+- OTP verification enforces expiry, attempt limits, and single-use behavior.
+- Duplicate active applications are rejected.
+- Rate limits are enforced for OTP request, OTP verify, and application submit flows.
 
 ## Data Integrity Controls
 
-- unique constraints on critical tuples (registration, roster entry, medal record).
-- serializer-level validation for roster ownership and schedule conflicts.
-- medal standings derived from ledger updates via signals.
+- unique constraints on registrations, roster entries, medal records, podium ranks, and tryout applications
+- serializer validation for roster ownership
+- serializer validation for schedule time ordering and venue-area conflicts
+- serializer safeguards for event result-mode and medal-bearing changes after linked data exists
+- medal standings are derived from the medal ledger and sorted by gold, silver, bronze, then department name
 
-## Rooney Safety Controls
+## Rooney and AI Safety Controls
 
-- strict grounding prompt and schema-constrained response format.
-- refusal pathway for off-topic or ungrounded responses.
-- persistent Rooney query audit logs.
+- Rooney uses server-built grounding context.
+- Rooney may ground on published news, schedules, official results, medal tally, and leaderboard.
+- Rooney logs question, answer/refusal, intent, sources, and response time.
+- AI recap generation stores input snapshots and citation maps.
+- AI recap drafts are admin-only until published as official news.
+- Recap generation falls back to template-grounded copy if Gemini is unavailable.
 
 ## Current Security Gaps
 
-1. `CORS_ALLOW_ALL_ORIGINS=True` should be restricted in production.
-2. DRF global permission default is `AllowAny`; secure-by-default should be `IsAuthenticated`.
-3. Access tokens stored in localStorage are exposed if XSS is introduced.
-4. No documented rate-limiting for auth or Rooney endpoints.
-5. No explicit CSRF strategy documentation for mixed auth patterns.
-6. No secrets template or validation workflow in repository.
+1. DRF global permission default is `AllowAny`; secure-by-default should be considered after endpoint audit.
+2. `CORS_ALLOW_ALL_ORIGINS` can be enabled in debug mode if no allowed origins are configured.
+3. Auth and Rooney endpoints do not yet use DRF throttling classes.
+4. No Content Security Policy is configured.
+5. Refresh-token blacklist app is not installed, so cookie clearing is the primary logout behavior unless rotation/blacklist is expanded.
+6. Production settings split is not yet implemented.
 
 ## Recommended Hardening Plan
 
-1. Add `settings/base.py`, `settings/dev.py`, and `settings/prod.py` split.
-2. Restrict CORS origins and allowed methods by environment.
-3. Flip DRF default permission to `IsAuthenticated` and explicitly open public endpoints.
-4. Add throttling policies (`AnonRateThrottle`, `UserRateThrottle`) for login and Rooney.
-5. Add Content Security Policy and stricter frontend dependency hygiene.
-6. Consider moving auth token strategy to secure HttpOnly cookie model if acceptable for architecture.
+1. Split settings into base/dev/prod profiles.
+2. Wire `DATABASE_URL` for PostgreSQL production use.
+3. Restrict CORS and CSRF trusted origins by environment.
+4. Add DRF throttling for auth, Rooney, and public tryout endpoints.
+5. Add CSP and security headers.
+6. Add structured logging and audit-friendly admin action history.
+7. Add refresh token blacklist support if rotation is enabled for production.
 
 ## Testing Architecture
 
 ## Current State
 
-Backend tests in:
+Backend smoke tests exist in:
 
 - `backend/core/tests.py`
 - `backend/events/tests.py`
 - `backend/tournaments/tests.py`
 - `backend/rooney/tests.py`
 
-are currently placeholders only.
+Current covered areas include:
+
+- admin auth cookie behavior and admin news access
+- public news published-only behavior
+- department representative admin-news denial
+- department serializer representative fields
+- event public/admin create permissions
+- AI recap admin access permissions
+- medal tally gold/silver/bronze priority sorting
 
 Frontend test infrastructure is not currently defined in committed scripts.
 
-## Required Test Layers
+## Recommended Test Layers
 
 ### Backend Unit Tests
 
-- serializers: registration constraints and schedule conflict logic
-- services: match/podium medal assignment behavior
-- signals: tally recompute correctness after create/delete
-- Rooney services: grounding context composition and refusal fallback logic
+- schedule conflict validation
+- event edit safeguards
+- tryout OTP expiry/attempt/duplicate rules
+- registration roster ownership
+- medal service behavior
+- Rooney grounding context composition
+- AI recap fallback behavior
 
 ### Backend API Tests
 
 - permission matrix by role per endpoint
-- registration workflow lifecycle (submit, revise, approve)
-- result finalization side effects (medal records and tally)
-- Rooney endpoint request validation and response contract
+- public tryout send/verify/apply lifecycle
+- registration submit/revise/approve lifecycle
+- result finalization side effects
+- news and AI recap publish flow
+- Rooney happy path/refusal path
 
 ### Frontend Tests
 
-- auth context decode/login/logout behavior
-- protected route redirects
-- API interceptor refresh token path
-- key page render behavior for loading/error/empty states
+- auth restore after refresh
+- protected route loading/redirect behavior
+- API interceptor refresh retry
+- admin event/schedule modals
+- public tryout form state
+- news and AI recap review state
 
 ### End-to-End Tests
 
-- login to admin dashboard flow
-- department athlete creation and registration submission
-- admin approval and status visibility on rep account
-- Rooney query happy path and refusal path
+- admin login and dashboard
+- department rep tryout-to-roster-to-registration flow
+- admin registration review
+- result finalization to medal tally and AI recap
+- AI recap publish to public news
+- Rooney grounded query
 
 ## Risk Register
 
 | Risk | Impact | Likelihood | Mitigation |
 | --- | --- | --- | --- |
-| Incorrect medal assignment logic for special formats | High | Medium | Event-stage aware medal policy engine + tests |
-| Unauthorized data exposure from permissive defaults | High | Medium | Restrictive default permissions + endpoint audits |
-| Rooney latency or outages degrade UX | Medium | Medium | timeout policies, retries, cached fallback messaging |
-| SQLite contention under concurrent writes | Medium | Medium | migrate to PostgreSQL before scale-up |
-| Missing automated tests causes regressions | High | High | establish CI test gates and minimum coverage targets |
+| Incorrect medal assignment logic for special formats | High | Medium | Event-stage policy layer and tests |
+| Unauthorized data exposure from permissive defaults | High | Medium | Restrictive defaults and endpoint audit |
+| Rooney or Gemini latency degrades UX | Medium | Medium | timeouts, retries, fallback messaging, async queue |
+| Turnstile/Brevo outage blocks tryout applications | Medium | Medium | operator alerts and retry guidance |
+| SQLite contention under concurrent writes | Medium | Medium | PostgreSQL migration |
+| Missing frontend tests causes regressions | Medium | Medium | add Vitest/RTL or E2E test layer |
 
 ## Priority Recommendations
 
-1. Implement automated tests for tournaments and auth permissions first.
-2. Harden security defaults (`CORS`, DRF permissions, throttling).
-3. Introduce production settings and PostgreSQL migration path.
-4. Add API schema generation and contract checks in CI.
-5. Add structured logging and health checks for operations readiness.
-
-## Architecture Governance Suggestions
-
-- adopt ADRs (Architecture Decision Records) for major domain logic changes
-- define versioning policy for API contracts
-- define change-impact checklist for tournament scoring rule updates
-- schedule periodic security and permissions review before intramurals season start
+1. Add tests for public tryout verification and schedule/event validation.
+2. Harden production settings and CORS/CSRF policies.
+3. Introduce PostgreSQL settings and migration plan.
+4. Add API schema generation and contract checks.
+5. Add frontend test runner and core route/auth tests.
+6. Add structured logging and health checks.
