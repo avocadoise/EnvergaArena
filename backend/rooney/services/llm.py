@@ -7,6 +7,7 @@ import os
 import re
 from google import genai
 from google.genai import types
+from .model_fallbacks import get_gemini_model_chain, is_retryable_model_error
 
 SYSTEM_PROMPT = """You are Rooney, the official AI FAQ assistant for Enverga Arena — the MSEUF intramurals management portal.
 
@@ -49,38 +50,45 @@ def query_rooney(question: str, context: str) -> dict:
     client = genai.Client(api_key=api_key)
     prompt = SYSTEM_PROMPT.replace("{context}", context)
     full_prompt = f"{prompt}\n\nUSER QUESTION: {question}"
+    errors = []
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash-lite",
-            contents=full_prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=512,
-                response_mime_type="application/json",
-                response_schema=RESPONSE_SCHEMA,
+    for model_name in get_gemini_model_chain():
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=full_prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=512,
+                    response_mime_type="application/json",
+                    response_schema=RESPONSE_SCHEMA,
+                )
             )
-        )
-        raw_text = response.text.strip()
-        print("[Rooney raw]", repr(raw_text[:500]))  # debug
+            raw_text = response.text.strip()
 
-        # Clean trailing commas (thinking models sometimes emit them)
-        cleaned = re.sub(r',\s*([}\]])', r'\1', raw_text)
-        result = json.loads(cleaned)
+            # Clean trailing commas (thinking models sometimes emit them)
+            cleaned = re.sub(r',\s*([}\]])', r'\1', raw_text)
+            result = json.loads(cleaned)
 
-        # Validate required keys
-        required = {"answer_text", "grounded", "source_labels", "refusal_reason"}
-        if not required.issubset(result.keys()):
-            raise ValueError("Incomplete response structure")
+            # Validate required keys
+            required = {"answer_text", "grounded", "source_labels", "refusal_reason"}
+            if not required.issubset(result.keys()):
+                raise ValueError("Incomplete response structure")
 
-        return result
+            result["model_name"] = model_name
+            return result
 
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {
-            "answer_text": "",
-            "grounded": False,
-            "source_labels": [],
-            "refusal_reason": f"[DEBUG] {type(e).__name__}: {str(e)}",
-        }
+        except Exception as e:
+            errors.append(f"{model_name}: {type(e).__name__}: {str(e)}")
+            if not is_retryable_model_error(e):
+                break
+
+    if errors:
+        print("[Rooney model fallback failures]", " | ".join(errors))
+
+    return {
+        "answer_text": "",
+        "grounded": False,
+        "source_labels": [],
+        "refusal_reason": "Rooney AI is temporarily unavailable. Tried configured Gemini model fallback chain.",
+    }
