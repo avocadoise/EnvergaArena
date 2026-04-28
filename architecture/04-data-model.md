@@ -2,16 +2,17 @@
 
 ## Data Architecture Overview
 
-The backend uses a relational schema organized around four domains:
+The backend uses a relational schema organized around four primary Django apps:
 
-- core references (departments, venues, user profiles)
-- event catalog (categories and events)
-- competition operations (schedules, rosters, results)
-- AI audit logs (Rooney query history)
+1. **Core (core)**: Core references (departments, venues, user profiles, news articles).
+2. **Events (events)**: Event catalog (categories and specific events).
+3. **Tournaments (	ournaments)**: Competition operations (schedules, athletes, tryouts, registrations, rosters, results, ledgers).
+4. **Rooney AI (
+ooney)**: AI audit logs and generated recaps.
 
 ## Entity Relationship Diagram
 
-```mermaid
+`mermaid
 erDiagram
     USER ||--o| USER_PROFILE : has
     DEPARTMENT ||--o{ USER_PROFILE : owns
@@ -21,6 +22,8 @@ erDiagram
     DEPARTMENT ||--o{ PODIUM_RESULT : appears_in
     DEPARTMENT ||--o{ MEDAL_RECORD : earns
     DEPARTMENT ||--o| MEDAL_TALLY : aggregates
+    DEPARTMENT ||--o{ NEWS_ARTICLE : linked_to
+    DEPARTMENT ||--o{ TRYOUT_APPLICATION : receives
 
     VENUE ||--o{ VENUE_AREA : contains
     EVENT_CATEGORY ||--o{ EVENT : groups
@@ -32,168 +35,118 @@ erDiagram
     EVENT_REGISTRATION ||--o{ ROSTER_ENTRY : includes
     ATHLETE ||--o{ ROSTER_ENTRY : selected
 
+    EVENT_SCHEDULE ||--o{ TRYOUT_APPLICATION : targets
+
     EVENT_SCHEDULE ||--o| MATCH_RESULT : finalizes
     MATCH_RESULT ||--o{ MATCH_SET_SCORE : details
-
     EVENT_SCHEDULE ||--o{ PODIUM_RESULT : ranks
 
     EVENT ||--o{ MEDAL_RECORD : references
     MATCH_RESULT ||--o{ MEDAL_RECORD : source_match
     PODIUM_RESULT ||--o{ MEDAL_RECORD : source_podium
-```
+`
 
-## Core Entities
+---
+
+## 1. Core Models (core/models.py)
 
 ### Department
+- Represents a participating college/department.
+- **Fields**: 
+ame, cronym, color_code
 
-- unique `name`
-- unique `acronym`
-- optional `color_code`
-
-Referenced by user profiles, athletes, registrations, results, medal records, and tally.
+### Venue & VenueArea
+- **Venue**: Logical facility location (e.g., University Gymnasium).
+- **VenueArea**: Subdivision of a venue (e.g., Court A, Court B) with capacity. Used in schedule conflict validation.
 
 ### UserProfile
+- One-to-one with the Django User model.
+- **Fields**: 
+ole (dmin or department_rep), foreign key to Department (optional).
 
-- one-to-one with Django user
-- `role` enum: `admin` or `department_rep`
-- optional department association
+### NewsArticle
+- Official communications and updates.
+- **Fields**: 	itle, slug, summary, ody_md, rticle_type (announcement, result_recap, etc.), status (draft, review, published, archived), i_generated.
+- Optionally links to a specific Event or Department. Tracks created_by and 
+eviewed_by.
 
-## Venue and Space Model
+---
 
-### Venue
-
-Logical facility location.
-
-### VenueArea
-
-Subdivision of venue (court, lane set, esports room, etc.).
-
-Used in schedule conflict validation.
-
-## Event Catalog Model
+## 2. Event Models (events/models.py)
 
 ### EventCategory
-
-- unique `name`
-- `is_medal_bearing`
+- Groups events (e.g., Ball Games, Aquatics).
+- **Fields**: 
+ame, is_medal_bearing.
 
 ### Event
+- Base definition for a competition.
+- **Fields**: category, 
+ame, 
+esult_family (match_based or 
+ank_based), status (scheduled, live, completed, postponed, cancelled), and is_program_event (for non-medal activities like opening ceremonies).
 
-- foreign key to category
-- `result_family`: `match_based` or `rank_based`
-- `status`: scheduled/live/completed/postponed/cancelled
-- `is_program_event` to represent non-medal program activities
+---
 
-## Tournament Operational Model
+## 3. Tournament Models (	ournaments/models.py)
 
 ### EventSchedule
-
-Binds event to venue/time.
+- Binds an Event to a specific Venue, VenueArea, and start/end time.
 
 ### Athlete
+- Department-owned participant record.
+- **Fields**: student_number, ull_name, department, program_course, year_level, is_enrolled, medical_cleared.
 
-Department-owned athlete record including eligibility-related flags:
+### EmailVerificationCode & TryoutApplication
+- **EmailVerificationCode**: Hashed OTP metadata for secure tryout verification.
+- **TryoutApplication**: Public application submitted by a student. Tracks email verification state, priority status (submitted, under_review, selected, waitlisted, etc.), and a 1-to-1 conversion link to an Athlete record once accepted.
 
-- `is_enrolled`
-- `medical_cleared`
+### EventRegistration & RosterEntry
+- **EventRegistration**: A department's intent to compete in a scheduled event. Status tracks the administrative pipeline (submitted, 
+eeds_revision, pproved). Constraint: Unique across (schedule, department).
+- **RosterEntry**: A join table mapping an Athlete to an EventRegistration. Includes is_eligible.
 
-### EventRegistration
-
-Department submission for a schedule.
-
-Constraint:
-
-- unique pair (`schedule`, `department`)
-
-### RosterEntry
-
-Join row between registration and athlete.
-
-Constraint:
-
-- unique pair (`registration`, `athlete`)
-
-## Result Models
-
-### MatchResult
-
-One-to-one with schedule for head-to-head events.
-
-Fields include scores, winner, draw flag, finalization flag, and recorder.
-
-### MatchSetScore
-
-Optional per-set or per-period breakdown.
-
-Constraint:
-
-- unique pair (`match`, `set_number`)
+### MatchResult & MatchSetScore
+- For match_based events (head-to-head). 
+- Tracks home_department, way_department, final scores, winner, is_draw, and is_final (which determines medals via signals).
+- **MatchSetScore** supports per-period score granularity.
 
 ### PodiumResult
+- For 
+ank_based events (placements).
+- Tracks department, 
+ank, the awarded medal (gold, silver, bronze, none), and an is_final flag.
 
-Ranked placement row for rank-based events.
+### MedalRecord & MedalTally
+- **MedalRecord**: An immutable, write-once ledger entry generated via signals when results are finalized. One row per (department, event).
+- **MedalTally**: Aggregated standing per department for fast display. Recomputed derived data representing total gold, silver, and bronze medals. 
 
-Constraints:
+---
 
-- unique pair (`schedule`, `rank`)
-- medal enum: gold/silver/bronze/none
-
-## Medal and Standing Models
-
-### MedalRecord
-
-Ledger record representing awarded medal for a department and event.
-
-Constraint:
-
-- unique pair (`department`, `event`)
-
-Includes optional source links to match or podium rows.
-
-### MedalTally
-
-One-to-one aggregate per department.
-
-Fields:
-
-- `gold`
-- `silver`
-- `bronze`
-- `total_points`
-
-Sort order is medal-priority descending.
-
-## Rooney Audit Model
+## 4. Rooney AI Models (
+ooney/models.py)
 
 ### RooneyQueryLog
+- Audit log of user interactions with the public AI assistant.
+- **Fields**: question, nswer_text, grounded (boolean for safe resolution), source_labels (JSON), 
+efusal_reason.
 
-Captures each Rooney request and response metadata:
+### AIRecap
+- AI-generated match, schedule, or podium summaries awaiting human approval.
+- **Fields**: 	rigger_type (event_completion, manual, etc.), scope_type, scope_key, linked_news_article.
+- Stores raw generation inputs/outputs (input_snapshot_json, citation_map_json, generated_body).
+- Admin statuses: generated, under_review, pproved, discarded, published. 
 
-- question
-- answer text
-- grounded flag
-- source labels
-- refusal reason
-- timestamp
-
-## Derived Data and Consistency Rules
-
-1. `MedalTally` is derived from `MedalRecord`, not source-of-truth data.
-2. Signal handlers recompute tally on medal create/delete.
-3. Result finalization services write or update medal records.
-4. Registration validation enforces department roster ownership.
-5. Schedule validation prevents overlapping active use of same venue area.
+---
 
 ## Current Data Model Strengths
 
-- clear separation between raw results and standings
-- support for multiple result families
-- role and department linkage in profile model
-- explicit roster bridge supports variable team size
+- Clear separation between raw operational results (MatchResult/PodiumResult), immutable ledgers (MedalRecord), and view materializations (MedalTally).
+- Security architecture tracks AI provenance explicitly (AIRecap, RooneyQueryLog, i_generated fields).
+- Public actions (Tryouts) safely funnel into internal domain boundaries (Athlete) via a conversion pointer (converted_athlete bridge).
 
-## Current Data Model Constraints and Future Opportunities
+## Future Opportunities
 
-- no soft-delete or versioning strategy for operational entities
-- no explicit historical stage model (quarterfinal/final/bronze match)
-- no per-event medal rule strategy table
-- no indexing strategy documented for expected scale-up
+- Soft-delete or versioning strategies for operational entities.
+- Advanced bracketing (group stage vs knockout nodes).
+- Additional performance indexing for scaled queries (e.g., historical analytics).
