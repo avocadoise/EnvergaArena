@@ -35,6 +35,7 @@ import {
 } from '../../hooks/useAdminData';
 import type { EventRegistration } from '../../hooks/useAdminData';
 import { useMatchResults, useMedalTally, usePodiumResults, useSchedules } from '../../hooks/usePublicData';
+import DepartmentLogo from '../../components/DepartmentLogo';
 
 interface RegistrationErrorBody {
     schedule?: string[];
@@ -136,7 +137,13 @@ function AdminView() {
                             <div className="card-body p-5">
                                 <div className="flex flex-col gap-4">
                                     <div className="flex justify-between gap-4">
-                                        <div>
+                                        <div className="flex min-w-0 items-start gap-3">
+                                            <DepartmentLogo
+                                                acronym={reg.department_acronym}
+                                                name={reg.department_name}
+                                                className="h-12 w-12"
+                                            />
+                                            <div className="min-w-0">
                                             <div className="badge badge-warning mb-2 h-auto min-h-6 whitespace-nowrap px-3 py-1 text-xs capitalize leading-tight">{labelize(reg.status)}</div>
                                             <h3 className="font-bold text-lg text-charcoal">
                                                 {reg.department_name}
@@ -150,6 +157,7 @@ function AdminView() {
                                             <p className="text-xs text-gray-600">
                                                 {formatScheduleDate(reg.schedule_start)}{reg.venue_name ? ` at ${reg.venue_name}` : ''}
                                             </p>
+                                            </div>
                                         </div>
                                         <div className="flex flex-wrap gap-2 justify-end">
                                             <button
@@ -202,10 +210,13 @@ function AdminView() {
                     </div>
                     <div className="space-y-3">
                         {tally?.slice(0, 5).map((row, index) => (
-                            <div key={row.id} className="flex items-center justify-between rounded-md bg-base-200 p-3">
-                                <div>
-                                    <div className="text-xs font-bold text-maroon">Rank {index + 1}</div>
-                                    <div className="font-semibold">{row.department_name}</div>
+                            <div key={row.id} className="flex items-center justify-between gap-3 rounded-md bg-base-200 p-3">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <DepartmentLogo acronym={row.department_acronym} name={row.department_name} className="h-10 w-10" />
+                                    <div className="min-w-0">
+                                        <div className="text-xs font-bold text-maroon">Rank {index + 1}</div>
+                                        <div className="font-semibold">{row.department_name}</div>
+                                    </div>
                                 </div>
                                 <div className="flex gap-3 text-sm font-bold">
                                     <span>G {row.gold}</span>
@@ -243,10 +254,10 @@ function AdminView() {
 
                 <DashboardPanel title="Quick Actions" icon={<Plus className="h-5 w-5" />}>
                     <div className="grid gap-2">
-                        <Link to="/admin/events" className="btn btn-sm justify-start">Create Event</Link>
-                        <Link to="/admin/schedules" className="btn btn-sm justify-start">Add Schedule</Link>
+                        <Link to="/admin/events" className="btn btn-sm justify-start">Manage Events</Link>
+                        <Link to="/admin/schedules" className="btn btn-sm justify-start">View Schedules</Link>
                         <Link to="/admin/registrations" className="btn btn-sm justify-start">Review Registrations</Link>
-                        <Link to="/admin/results-entry" className="btn btn-sm justify-start">Enter Results</Link>
+                        <Link to="/admin/results-entry" className="btn btn-sm justify-start">Review Results Entry</Link>
                         <Link to="/admin/news" className="btn btn-sm justify-start">Post Announcement</Link>
                     </div>
                 </DashboardPanel>
@@ -293,10 +304,17 @@ function DeptRepView() {
         <div className="space-y-6">
             <section className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <p className="text-xs font-bold uppercase text-maroon">{user?.department_acronym}</p>
-                        <h2 className="text-2xl font-black text-charcoal">{user?.department_name}</h2>
-                        <p className="text-sm text-gray-600">Selection, roster building, registration status, and department performance.</p>
+                    <div className="flex items-start gap-4">
+                        <DepartmentLogo
+                            acronym={user?.department_acronym}
+                            name={user?.department_name}
+                            className="h-16 w-16"
+                        />
+                        <div>
+                            <p className="text-xs font-bold uppercase text-maroon">{user?.department_acronym}</p>
+                            <h2 className="text-2xl font-black text-charcoal">{user?.department_name}</h2>
+                            <p className="text-sm text-gray-600">Selection, roster building, registration status, and department performance.</p>
+                        </div>
                     </div>
                     <div className="rounded-md bg-maroon px-4 py-3 text-white">
                         <p className="text-xs font-bold uppercase text-white/80">Current Rank</p>
