@@ -4,12 +4,28 @@
 
 ## Identity and Access
 
-Implemented controls:
+Implemented controls and authentication flow:
 
-- JWT-based authentication for protected workflows.
-- Custom token claims include user role and department context.
-- View-level permission classes guard write operations.
-- Queryset scoping restricts department-rep visibility for athletes and registrations.
+### 1. Token Generation (Backend)
+- Uses **JWT-based authentication** via `djangorestframework-simplejwt`.
+- The login endpoint (`/api/auth/login/`) uses a `CustomTokenObtainPairSerializer`.
+- **Custom Claims**: The access token payload is enriched with the user's `username`, `role` (`admin` or `department_rep`), and department metadata (`department_id`, `department_name`, `department_acronym`). This removes the need for a separate `/me` endpoint on the frontend to fetch user metadata.
+- View-level permission classes (e.g., `IsAdminUser`, `IsAdminOrReadOnly`) guard protected write operations based on the actor's logged-in identity.
+- Queryset scoping dynamically restricts `department_rep` visibility, ensuring they only see their own department's athletes and registrations.
+
+### 2. Token Storage and Session State (Frontend)
+- **Local Storage**: `access` and `refresh` tokens are persisted securely in browser `localStorage` to survive window reloads (`src/services/auth.ts`).
+- **Auth Context**: `AuthContext.tsx` uses `jwt-decode` to read the custom JWT claims locally. It provides the application with a `user` object containing the `role` and `department_id` without requiring an additional network round-trip.
+- **Cross-Tab Sync**: Storage event listeners ensure that logging in or out in one tab instantly propagates the authentication state across all open application instances.
+
+### 3. API Interceptors & Auto-Refresh
+- All outbound requests to the backend pass through an Axios interceptor (`src/services/api.ts`) that automatically attaches `Authorization: Bearer <access_token>`.
+- If an API request returns a `401 Unauthorized` due to token expiration, a response interceptor catches the failure, calls `/api/auth/refresh/` using the refresh token, updates the tokens, and transparently retries the original failed request.
+- If the refresh token is also expired or invalid, the interceptor clears the tokens and drops the session.
+
+### 4. Route Protection
+- Frontend routing utilizes a `ProtectedRoute.tsx` wrapper.
+- Routes define `allowedRoles` (e.g., `['admin']` or `['department_rep']`). If the decoded token role doesn't match the required role, the router intercepts the navigation and bounces the user to their designated role portal (or login).
 
 ## Data Integrity Controls
 
