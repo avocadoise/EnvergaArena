@@ -23,8 +23,8 @@
 
 - Axios attaches the in-memory access token to protected requests.
 - `withCredentials: true` allows the browser to send the HttpOnly refresh cookie.
-- On one `401`, the client calls `/api/auth/refresh/` and retries the original request.
-- Refresh failure clears in-memory auth state.
+- On one `401`, the client calls `/api/auth/refresh/` (sending the HttpOnly refresh cookie) and retries the original request.
+- Refresh failure (meaning the refresh token in the HttpOnly cookie has expired) clears in-memory auth state, requiring the user to log in again.
 
 ### Logout
 
