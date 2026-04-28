@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { ArrowLeft, CalendarDays, Link2, Sparkles } from 'lucide-react';
 import { usePublishedNews, usePublishedNewsArticle } from '../../hooks/usePublicData';
+import DepartmentLogo from '../../components/DepartmentLogo';
 
 export default function NewsArticlePage() {
     const { slug } = useParams();
@@ -73,7 +74,12 @@ export default function NewsArticlePage() {
                             {article.event_name}
                         </span>
                     )}
-                    {article.department_name && <span>{article.department_name}</span>}
+                    {article.department_name && (
+                        <span className="inline-flex items-center gap-2">
+                            <DepartmentLogo name={article.department_name} className="h-7 w-7 border-0 shadow-none" />
+                            {article.department_name}
+                        </span>
+                    )}
                     <span>{article.source_label || 'Enverga Arena Editorial Desk'}</span>
                 </div>
 
