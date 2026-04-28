@@ -11,6 +11,7 @@ import {
     CheckCircle,
     ClipboardList,
     Clock,
+    ExternalLink,
     FileText,
     Gauge,
     Medal,
@@ -53,18 +54,31 @@ export default function Dashboard({ mode }: DashboardProps) {
 
     return (
         <div className="py-8">
-            <h1 className="text-3xl font-bold text-charcoal mb-2">
-                {resolvedMode === 'admin' ? 'Central Administration' : 'Department Representative Portal'}
-            </h1>
-            <p className="text-gray-600 mb-8">
-                Welcome, <span className="font-semibold text-maroon">{user?.username}</span>
-                {user?.department_name && (
-                    <>
-                        {' '}from <span className="font-semibold text-charcoal">{user.department_name}</span>
-                        {user.department_acronym && ` (${user.department_acronym})`}
-                    </>
-                )}
-            </p>
+            <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold text-charcoal mb-2">
+                        {resolvedMode === 'admin' ? 'Central Administration' : 'Department Representative Portal'}
+                    </h1>
+                    <p className="text-gray-600">
+                        Welcome, <span className="font-semibold text-maroon">{user?.username}</span>
+                        {user?.department_name && (
+                            <>
+                                {' '}from <span className="font-semibold text-charcoal">{user.department_name}</span>
+                                {user.department_acronym && ` (${user.department_acronym})`}
+                            </>
+                        )}
+                    </p>
+                </div>
+                <Link
+                    to="/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline border-maroon text-maroon hover:bg-maroon hover:text-white"
+                >
+                    View Public Site
+                    <ExternalLink className="h-4 w-4" />
+                </Link>
+            </div>
 
             {resolvedMode === 'admin' ? <AdminView /> : <DeptRepView />}
         </div>

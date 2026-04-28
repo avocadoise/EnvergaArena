@@ -34,13 +34,19 @@ export default function Home() {
             </section>
 
             {/* Top 3 Leaderboard Widget */}
-            <section className="max-w-4xl mx-auto">
-                <div className="flex items-center justify-between mb-8 px-2">
-                    <h2 className="text-3xl font-bold text-charcoal flex items-center gap-2">
-                        <Trophy className="w-8 h-8 text-gold"/> Current Leaders
+            <section className="mx-auto max-w-5xl">
+                <div className="mb-8 flex flex-col gap-3 px-2 sm:flex-row sm:items-center sm:justify-between">
+                    <h2 className="flex items-center gap-3 text-3xl font-black text-charcoal">
+                        <span className="grid h-11 w-11 place-items-center rounded-full border border-yellow-300/70 bg-yellow-50 text-yellow-700 shadow-sm">
+                            <Trophy className="h-6 w-6" />
+                        </span>
+                        Current Leaders
                     </h2>
-                    <Link to="/results" className="text-maroon font-semibold hover:underline flex items-center gap-1">
-                        Full Tally <ArrowRight className="w-4 h-4"/>
+                    <Link
+                        to="/results"
+                        className="btn btn-sm border-maroon/25 bg-white text-maroon shadow-sm hover:border-maroon hover:bg-maroon hover:text-white"
+                    >
+                        Full Tally <ArrowRight className="h-4 w-4" />
                     </Link>
                 </div>
                 
@@ -76,73 +82,88 @@ function Top3Widget() {
         top3[0] && {
             ...top3[0],
             orderClass: 'md:order-2',
-            cardClass: 'border-yellow-500 bg-yellow-50 shadow-2xl md:-mt-8 md:scale-110 z-10',
-            rankClass: 'bg-yellow-500 text-white',
+            cardClass: 'border-yellow-400 bg-yellow-50/95 shadow-2xl shadow-yellow-900/10 md:-mt-10 md:scale-105 z-10',
+            rankClass: 'border-yellow-200 bg-yellow-500 text-white shadow-md shadow-yellow-900/15',
+            logoClass: 'h-24 w-24 ring-4 ring-yellow-300/60 ring-offset-4 ring-offset-yellow-50',
+            statClass: 'border-yellow-200/80 bg-white/80',
+            totalClass: 'border-yellow-300/80 bg-yellow-100/70',
             medalLabel: 'Gold',
-            medalClass: 'text-yellow-700',
+            medalClass: 'border-yellow-300 bg-yellow-100 text-yellow-800',
+            bronzeTextClass: 'text-amber-700',
         },
         top3[1] && {
             ...top3[1],
             orderClass: 'md:order-1',
-            cardClass: 'border-slate-400 bg-slate-50',
-            rankClass: 'bg-slate-500 text-white',
+            cardClass: 'border-slate-300 bg-slate-50/95 shadow-lg shadow-slate-900/5',
+            rankClass: 'border-slate-200 bg-slate-500 text-white shadow-sm',
+            logoClass: 'h-20 w-20 ring-4 ring-slate-200 ring-offset-4 ring-offset-slate-50',
+            statClass: 'border-slate-200 bg-white/80',
+            totalClass: 'border-slate-200 bg-white/75',
             medalLabel: 'Silver',
-            medalClass: 'text-slate-600',
+            medalClass: 'border-slate-300 bg-slate-100 text-slate-700',
+            bronzeTextClass: 'text-amber-700',
         },
         top3[2] && {
             ...top3[2],
             orderClass: 'md:order-3',
-            cardClass: 'border-amber-700 bg-amber-50',
-            rankClass: 'bg-amber-700 text-white',
+            cardClass: 'border-orange-800/70 bg-orange-100/80 shadow-lg shadow-orange-950/10',
+            rankClass: 'border-orange-300/70 bg-orange-900 text-orange-50 shadow-sm',
+            logoClass: 'h-20 w-20 ring-4 ring-orange-800/30 ring-offset-4 ring-offset-orange-100',
+            statClass: 'border-orange-800/20 bg-white/80',
+            totalClass: 'border-orange-800/25 bg-orange-50/90',
             medalLabel: 'Bronze',
-            medalClass: 'text-amber-700',
+            medalClass: 'border-orange-800/30 bg-orange-900/10 text-orange-950',
+            bronzeTextClass: 'text-orange-900',
         },
     ].filter(Boolean);
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+        <div className="grid grid-cols-1 items-end gap-5 md:grid-cols-3 lg:gap-6">
             {podium.map((dept) => (
                 <div
                     key={dept.id}
-                    className={`card shadow-xl border-t-4 transition-transform ${dept.orderClass} ${dept.cardClass}`}
+                    className={`relative overflow-hidden rounded-2xl border border-t-4 transition-transform ${dept.orderClass} ${dept.cardClass}`}
                 >
-                    <div className={`card-body items-center text-center ${dept.rank === 1 ? 'p-9' : 'p-8'}`}>
-                        <div className={`absolute top-4 left-4 rounded-full px-3 py-1 text-sm font-black ${dept.rankClass}`}>
+                    <div className={`flex h-full min-h-[390px] flex-col items-center text-center ${dept.rank === 1 ? 'px-7 py-8 md:min-h-[430px]' : 'px-6 py-7'}`}>
+                        <div className={`absolute left-5 top-5 rounded-full border px-3 py-1 text-sm font-black ${dept.rankClass}`}>
                             #{dept.rank}
                         </div>
-                        <div className={`text-sm font-black uppercase tracking-wider ${dept.medalClass}`}>
+                        <div className={`mb-5 rounded-full border px-4 py-1.5 text-xs font-black uppercase ${dept.medalClass}`}>
                             {dept.medalLabel}
                         </div>
                         <DepartmentLogo
                             acronym={dept.department_acronym}
                             name={dept.department_name}
-                            className={dept.rank === 1 ? 'h-24 w-24' : 'h-20 w-20'}
+                            className={`${dept.logoClass} border-white/80 shadow-md`}
                         />
-                        <h3 className={`${dept.rank === 1 ? 'text-5xl' : 'text-4xl'} font-black text-maroon mt-2`}>
+                        <h3 className={`${dept.rank === 1 ? 'mt-7 text-5xl' : 'mt-6 text-4xl'} font-black leading-none text-maroon`}>
                             {dept.department_acronym}
                         </h3>
-                        <p className="text-sm text-gray-600 mb-4">{dept.department_name}</p>
+                        <p className="mt-3 min-h-10 max-w-[15rem] text-sm font-semibold leading-snug text-gray-700">
+                            {dept.department_name}
+                        </p>
                         
-                        <div className="flex gap-4 justify-center mt-2">
-                            <div className="text-center">
-                                <div className="text-xl font-bold text-gold">{dept.gold}</div>
-                                <div className="text-xs font-bold uppercase">Gold</div>
+                        <div className={`mt-6 grid w-full grid-cols-3 rounded-xl border p-2.5 ${dept.statClass}`}>
+                            <div className="border-r border-base-300/70 px-2 text-center">
+                                <div className="text-2xl font-black text-yellow-700">{dept.gold}</div>
+                                <div className="mt-1 text-[0.68rem] font-bold uppercase text-gray-600">Gold</div>
                             </div>
-                            <div className="text-center">
-                                <div className="text-xl font-bold text-gray-700">{dept.silver}</div>
-                                <div className="text-xs font-bold uppercase">Silver</div>
+                            <div className="border-r border-base-300/70 px-2 text-center">
+                                <div className="text-2xl font-black text-slate-600">{dept.silver}</div>
+                                <div className="mt-1 text-[0.68rem] font-bold uppercase text-gray-600">Silver</div>
                             </div>
-                            <div className="text-center">
-                                <div className="text-xl font-bold text-amber-700">{dept.bronze}</div>
-                                <div className="text-xs font-bold uppercase">Bronze</div>
+                            <div className="px-2 text-center">
+                                <div className={`text-2xl font-black ${dept.bronzeTextClass || 'text-amber-700'}`}>{dept.bronze}</div>
+                                <div className="mt-1 text-[0.68rem] font-bold uppercase text-gray-600">Bronze</div>
                             </div>
                         </div>
                         
-                        <div className="mt-6 pt-4 border-t w-full">
-                            <div className={`${dept.rank === 1 ? 'text-4xl' : 'text-3xl'} font-black text-charcoal`}>
+                        <div className={`mt-4 w-full rounded-xl border px-4 py-3 ${dept.totalClass}`}>
+                            <div className="mx-auto mb-2 h-px w-16 bg-maroon/20" />
+                            <div className={`${dept.rank === 1 ? 'text-4xl' : 'text-3xl'} font-black leading-none text-charcoal`}>
                                 {dept.total_medals}
                             </div>
-                            <div className="text-xs font-bold uppercase text-gray-600">Total medals</div>
+                            <div className="mt-1 text-xs font-bold uppercase text-gray-600">Total Medals</div>
                         </div>
                     </div>
                 </div>
