@@ -1,11 +1,26 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import type { DecodedUser } from '../../context/AuthContext';
 import { setTokens } from '../../services/auth';
 import { API_URL } from '../../services/api';
 import axios from 'axios';
 import type { AxiosError } from 'axios';
+import { jwtDecode } from 'jwt-decode';
 import { LogIn } from 'lucide-react';
+
+const ROLE_HOME_PATH: Record<DecodedUser['role'], string> = {
+    admin: '/admin',
+    department_rep: '/portal',
+    none: '/',
+};
+
+function canVisitRequestedPath(path: string | undefined, role: DecodedUser['role']) {
+    if (!path) return false;
+    if (role === 'admin') return !path.startsWith('/portal');
+    if (role === 'department_rep') return !path.startsWith('/admin');
+    return path === '/';
+}
 
 export default function Login() {
     const [username, setUsername] = useState('');
@@ -13,11 +28,16 @@ export default function Login() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     
-    const { loginState } = useAuth();
+    const { isAuthenticated, loginState, user } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
-    const from = location.state?.from?.pathname || '/admin';
+    const requestedPath = location.state?.from?.pathname as string | undefined;
+
+    useEffect(() => {
+        if (!isAuthenticated || !user) return;
+        navigate(ROLE_HOME_PATH[user.role] || '/', { replace: true });
+    }, [isAuthenticated, navigate, user]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -30,9 +50,15 @@ export default function Login() {
                 password,
             });
             const { access, refresh } = res.data;
+            const decoded = jwtDecode<DecodedUser>(access);
+            const roleHome = ROLE_HOME_PATH[decoded.role] || '/';
+            const redirectPath = requestedPath && canVisitRequestedPath(requestedPath, decoded.role)
+                ? requestedPath
+                : roleHome;
+
             setTokens(access, refresh);
             loginState(access);
-            navigate(from, { replace: true });
+            navigate(redirectPath, { replace: true });
         } catch (err: unknown) {
             const loginError = err as AxiosError<{ detail?: string }>;
             setError(loginError.response?.data?.detail || 'Invalid credentials');
