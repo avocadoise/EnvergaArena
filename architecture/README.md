@@ -1,8 +1,8 @@
 # Enverga Arena Architecture Documentation
 
-Last updated: 2026-04-27
+Last updated: 2026-04-28
 
-This directory contains the full architecture documentation for Enverga Arena, the MSEUF intramurals registration, results, and medal tally platform with Rooney AI support.
+This directory documents the current implementation of Enverga Arena, the MSEUF intramurals registration, results, medal tally, public tryout, official news, Rooney AI, and AI recap review platform.
 
 ## Documentation Map
 
@@ -18,32 +18,39 @@ This directory contains the full architecture documentation for Enverga Arena, t
 
 ## Architecture at a Glance
 
-- Backend: Django + Django REST Framework + SimpleJWT.
-- Frontend: React 19 + TypeScript + Vite + Tailwind v4 + DaisyUI.
-- Data store: SQLite in current repository setup.
-- AI integration: Google Gemini (gemini-2.5-flash-lite) via Rooney service.
-- Domain model: events, schedules, registrations, match/podium results, medal ledger, computed medal tally.
-- Access model: public read endpoints plus JWT-protected admin/department-rep workflows.
+- Backend: Django 6 + Django REST Framework + SimpleJWT.
+- Frontend: React 19 + TypeScript + Vite 8 + Tailwind CSS v4 + DaisyUI.
+- Data store: SQLite in the committed local/dev configuration; PostgreSQL driver is installed for the intended production direction.
+- Auth model: access JWT in frontend memory only; refresh JWT in backend-issued HttpOnly cookie.
+- AI integration: Google Gemini through `google-genai`, with `gemini-2.5-flash-lite` as the default primary model and configurable backup models.
+- Public verification: Cloudflare Turnstile server verification plus Brevo transactional email OTP for public student tryout applications.
+- Content model: internal `AIRecap` drafts are reviewed by admins before publication as public `NewsArticle` records.
+- Domain model: departments, venues/areas, event catalog, schedules, tryout applications, participants, registrations, rosters, match/podium results, medal ledger, computed medal tally.
 
 ## System Context
 
 ```mermaid
 flowchart LR
-    A[Public User] --> B[React Frontend]
-    C[Department Rep] --> B
+    A[Public Viewer] --> B[React SPA]
+    C[Department Representative] --> B
     D[Admin / Sports Coordinator] --> B
+    E[Student Applicant] --> B
 
-    B -->|HTTP JSON| E[Django REST API]
-    E -->|ORM| F[(SQLite DB)]
-    E -->|Grounded prompt + question| G[Google Gemini API]
+    B -->|HTTP JSON + credentials| F[Django REST API]
+    F -->|ORM| G[(SQLite dev DB)]
+    F -->|Grounded prompts| H[Google Gemini]
+    F -->|Siteverify| I[Cloudflare Turnstile]
+    F -->|Transactional OTP| J[Brevo Email API]
 
-    E --> H[Rooney Query Logs]
-    E --> I[Medal Tally Computation]
+    F --> K[Rooney Logs]
+    F --> L[AI Recap Drafts]
+    F --> M[Published News]
+    F --> N[Medal Tally Computation]
 ```
 
 ## Source of Truth
 
-The architecture docs were derived from implementation in:
+The docs were synced against these implementation areas:
 
 - `backend/backend/settings.py`
 - `backend/backend/urls.py`
@@ -52,18 +59,24 @@ The architecture docs were derived from implementation in:
 - `backend/tournaments/*`
 - `backend/rooney/*`
 - `frontend/src/*`
+- `frontend/package.json`
+- `backend/requirements.txt`
 
 ## Current State Summary
 
-- The system is implemented as a modular monolith.
-- API endpoints are organized under `/api/public/` and `/api/auth/`.
-- Authorization is enforced in viewsets and role-based frontend route guards.
-- Medal standings are derived data, recomputed from an immutable medal ledger.
-- Rooney is grounding-first: answers are generated from live DB context and logged.
+- The system is a modular monolith with a React SPA and Django API.
+- API endpoints are organized under `/api/public/`, `/api/admin/`, and `/api/auth/`.
+- Protected requests use bearer access tokens from memory; session persistence uses an HttpOnly refresh cookie.
+- Public tryout applications use Turnstile + student email OTP and do not create student accounts.
+- Admin pages now include management flows for venues, events, schedules, registrations, participants, news, AI recaps, Rooney logs, medal tally, and leaderboard.
+- Department representatives are scoped to one department and manage tryout review, participant conversion, rosters, and registrations.
+- Medal standings are medal-priority only: gold, then silver, then bronze. There is no points ranking.
+- Rooney is grounding-first and may use published news, schedules, results, medal tally, and leaderboard as sources.
 
 ## Known Gaps Highlighted by This Documentation
 
-- Production database switching is not yet implemented in settings.
-- There is no committed `.env.example` file in `backend/`.
-- Automated tests are currently placeholders in all backend apps.
-- CORS and default DRF permissions are permissive and should be hardened for production.
+- The dev settings still use SQLite directly even though `psycopg2-binary` is installed for PostgreSQL readiness.
+- DRF default permission is still `AllowAny`; current safety depends on per-view permissions and queryset scoping.
+- AI calls are synchronous in-request; no task queue is in place.
+- Frontend test tooling is not configured yet.
+- The production settings split, health endpoints, and observability stack remain roadmap work.
