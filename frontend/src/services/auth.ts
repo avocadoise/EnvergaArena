@@ -1,10 +1,8 @@
-/**
- * Simple wrapper for storing tokens in localStorage.
- * Uses localStorage to survive browser restarts.
- */
+const LEGACY_ACCESS_TOKEN_KEY = 'enverga_access_token';
+const LEGACY_REFRESH_TOKEN_KEY = 'enverga_refresh_token';
 
-const ACCESS_TOKEN_KEY = 'enverga_access_token';
-const REFRESH_TOKEN_KEY = 'enverga_refresh_token';
+let accessToken: string | null = null;
+
 export const AUTH_STORAGE_EVENT = 'enverga-auth-changed';
 
 function emitAuthChanged() {
@@ -13,19 +11,26 @@ function emitAuthChanged() {
     }
 }
 
-export const getAccessToken = () => localStorage.getItem(ACCESS_TOKEN_KEY);
-export const getRefreshToken = () => localStorage.getItem(REFRESH_TOKEN_KEY);
+export const clearLegacyStoredTokens = () => {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+    localStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
+    sessionStorage.removeItem(LEGACY_ACCESS_TOKEN_KEY);
+    sessionStorage.removeItem(LEGACY_REFRESH_TOKEN_KEY);
+};
 
-export const setTokens = (access: string, refresh: string) => {
-    localStorage.setItem(ACCESS_TOKEN_KEY, access);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+export const getAccessToken = () => accessToken;
+
+export const setAccessToken = (token: string) => {
+    clearLegacyStoredTokens();
+    accessToken = token;
     emitAuthChanged();
 };
 
 export const clearTokens = () => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    clearLegacyStoredTokens();
+    accessToken = null;
     emitAuthChanged();
 };
 
-export const hasAccess = () => !!getAccessToken();
+export const hasAccess = () => !!accessToken;
