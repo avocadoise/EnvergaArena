@@ -2,22 +2,26 @@
 
 ## Environments
 
-## Development (Current)
+## Development
 
 - Backend runs with Django dev server.
 - Frontend runs with Vite dev server.
-- Database is SQLite file at `backend/db.sqlite3`.
-- CORS is fully open for local cross-origin testing.
+- Database is SQLite at `backend/db.sqlite3`.
+- CORS origins are controlled through `CORS_ALLOWED_ORIGINS`; if empty in debug mode, all origins are allowed for local development.
+- Refresh-token cookies are HttpOnly; `JWT_REFRESH_COOKIE_SECURE=False` is expected for plain localhost.
 
 ## Intended Production Direction
 
-Current repository does not include a dedicated production settings module. A hardened target profile is recommended:
+The repository does not yet include a dedicated production settings module. A hardened profile should add:
 
-- WSGI/ASGI app server (gunicorn or uvicorn workers)
-- reverse proxy (Nginx)
-- PostgreSQL managed database
+- WSGI/ASGI app server
+- reverse proxy or platform routing
+- PostgreSQL database
 - static asset hosting with cache policy
 - TLS termination and secure headers
+- restricted CORS and CSRF trusted origins
+- secure refresh cookie settings
+- structured logging and health checks
 
 ## Local Operations Runbook
 
@@ -41,24 +45,72 @@ npm run dev
 
 ## Environment Variables
 
-Observed and expected variables from code and setup docs:
+Templates exist at:
+
+- `backend/.env.example`
+- `frontend/.env.example`
+
+### Backend Variables
 
 - `SECRET_KEY`
 - `DEBUG`
+- `ALLOWED_HOSTS`
+- `CORS_ALLOWED_ORIGINS`
+- `CORS_ALLOW_CREDENTIALS`
+- `CSRF_TRUSTED_ORIGINS`
+- `DATABASE_URL` (documented for future PostgreSQL use; current settings still use SQLite)
+- `JWT_SECRET_KEY`
+- `JWT_ALGORITHM`
+- `JWT_ACCESS_TOKEN_LIFETIME_MINUTES`
+- `JWT_REFRESH_TOKEN_LIFETIME_DAYS`
+- `JWT_ROTATE_REFRESH_TOKENS`
+- `JWT_BLACKLIST_AFTER_ROTATION`
+- `JWT_UPDATE_LAST_LOGIN`
+- `JWT_REFRESH_COOKIE_NAME`
+- `JWT_REFRESH_COOKIE_SECURE`
+- `JWT_REFRESH_COOKIE_HTTPONLY`
+- `JWT_REFRESH_COOKIE_SAMESITE`
+- `JWT_REFRESH_COOKIE_DOMAIN`
+- `JWT_REFRESH_COOKIE_PATH`
 - `GEMINI_API_KEY`
+- `GEMINI_PRIMARY_MODEL`
+- `GEMINI_BACKUP_MODELS`
+- `TURNSTILE_SECRET_KEY`
+- `BREVO_API_KEY`
+- `BREVO_SENDER_EMAIL`
+- `BREVO_SENDER_NAME`
+- `TRYOUT_ALLOWED_EMAIL_DOMAIN`
+- `TRYOUT_OTP_EXPIRY_MINUTES`
+- `TRYOUT_VERIFIED_APPLICATION_WINDOW_MINUTES`
+- `TRYOUT_MAX_VERIFY_ATTEMPTS`
+- `TRYOUT_MAX_OTP_REQUESTS_PER_HOUR`
+- `TRYOUT_MAX_APPLICATIONS_PER_HOUR`
 
-Note: the repository currently lacks a committed `backend/.env.example` template.
+### Frontend Variables
+
+- `VITE_API_URL`
+- `VITE_TURNSTILE_SITE_KEY`
+
+No frontend variable should contain secrets.
 
 ## Data Lifecycle and Seeding
 
-`seed_data` command behavior:
+`seed_data` recreates:
 
-- clears prior demo and domain records
-- recreates departments, demo users, venues, categories, events, schedules
-- seeds athletes, registrations, match/podium results
-- populates medal ledger and tally entries
+- departments and representative accounts
+- admin account
+- venues and venue areas
+- event categories and events
+- schedules
+- athletes
+- tryout applications
+- registrations and rosters
+- match/podium results
+- medal records and tallies
+- official news articles
+- AI recap drafts
 
-This command is optimized for repeatable demo environments, not production migration scenarios.
+This command is for repeatable demo environments, not production data migration.
 
 ## Backup and Recovery Guidance
 
@@ -70,51 +122,58 @@ This command is optimized for repeatable demo environments, not production migra
 ## Production Recommendation
 
 - use PostgreSQL point-in-time recovery
-- daily logical dumps plus retention policy
-- migration rollback procedures and canary releases
+- schedule logical dumps with retention
+- validate migrations on staging snapshots
+- keep rollback plans for schema changes affecting events, schedules, and results
 
 ## Build and Release Pipeline Recommendation
 
 A practical CI/CD baseline:
 
-1. lint and type-check frontend
-2. run backend tests
-3. run frontend tests
-4. run Django migration check
-5. build frontend static bundle
-6. build backend artifact/container
-7. deploy to staging with smoke tests
-8. promote to production with rollback hooks
+1. install backend dependencies
+2. run `python manage.py check`
+3. run `python manage.py test`
+4. run migration check
+5. install frontend dependencies
+6. run `npm run lint`
+7. run `npm run build`
+8. deploy to staging
+9. smoke test auth, public pages, tryouts, admin workflows, AI recap/news, Rooney
+10. promote to production with rollback hooks
 
 ## Observability Status
 
 Current state:
 
-- Rooney errors print traceback server-side and return refusal payload
+- Rooney and recap fallbacks return structured refusal/fallback responses
+- Rooney queries are persisted as audit logs
+- AI recaps store input snapshots and citation maps
 - no structured application logging format committed
-- no metrics, tracing, or health endpoint strategy documented
+- no metrics, tracing, or health endpoint strategy committed
 
-Recommended minimum observability additions:
+Recommended additions:
 
 - JSON structured logs with correlation IDs
-- request/response timing middleware
+- request timing middleware
 - `/health` and `/ready` endpoints
-- alerting on error rate spikes and Rooney failure ratio
+- alerting on API error rate, auth refresh failures, Rooney refusal/error ratio, and email/Turnstile failures
 
 ## Scalability Considerations
 
-Current bottlenecks in growth scenarios:
+Current bottlenecks:
 
 - SQLite write contention under concurrent traffic
-- in-process synchronous Rooney calls increase request latency
-- no caching layer for frequently read public leaderboard/schedule endpoints
+- synchronous Gemini, Turnstile, and Brevo calls increase request latency
+- no cache layer for public standings/news/schedule reads
+- public tryout endpoints use Django cache-backed rate limiting but no external distributed cache is configured
 
 Scale-up recommendations:
 
-1. migrate to PostgreSQL
-2. introduce Redis cache for read-heavy public endpoints
-3. move Rooney request handling to async task queue for long-running calls
+1. wire `DATABASE_URL` to PostgreSQL settings
+2. introduce Redis for cache/rate-limit storage
+3. move Rooney and AI recap generation to an async task queue
 4. add pagination and filtering defaults where result sets may grow
+5. add CDN/static hosting for frontend assets
 
 ## Deployment Topology (Recommended)
 
@@ -126,13 +185,21 @@ flowchart LR
     RP --> API[Django API Service]
     API --> PG[(PostgreSQL)]
     API --> RC[(Redis Cache)]
-    API --> LLM[Gemini API]
+    API --> LLM[Gemini]
+    API --> CF[Turnstile]
+    API --> BR[Brevo]
 ```
 
 ## Release Safety Checklist
 
 - verify migrations on staging snapshot
-- verify role-based endpoint access controls
-- verify medal tally consistency after sample final result writes
-- verify Rooney fallback behavior with and without `GEMINI_API_KEY`
-- verify frontend token refresh workflow and forced logout path
+- verify admin and department-rep permissions
+- verify access token memory storage and refresh-cookie restore
+- verify logout clears refresh cookie
+- verify public tryout Turnstile and OTP behavior
+- verify schedule conflict validation
+- verify event edit safeguards with linked schedules/results
+- verify medal tally consistency after final result writes
+- verify AI recap generation fallback with and without `GEMINI_API_KEY`
+- verify public news only returns published articles
+- verify Rooney grounding and refusal behavior
