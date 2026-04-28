@@ -6,9 +6,28 @@ from django.utils.text import slugify
 from .models import Department, Venue, VenueArea, UserProfile, NewsArticle
 
 class DepartmentSerializer(serializers.ModelSerializer):
+    representative_name = serializers.SerializerMethodField()
+    representative_username = serializers.SerializerMethodField()
+    operational_status = serializers.SerializerMethodField()
+
     class Meta:
         model = Department
         fields = '__all__'
+
+    def get_representative_name(self, obj):
+        profile = obj.userprofile_set.select_related('user').filter(role='department_rep').first()
+        if not profile:
+            return ''
+        full_name = profile.user.get_full_name().strip()
+        return full_name or profile.user.username
+
+    def get_representative_username(self, obj):
+        profile = obj.userprofile_set.select_related('user').filter(role='department_rep').first()
+        return profile.user.username if profile else ''
+
+    def get_operational_status(self, obj):
+        has_rep = obj.userprofile_set.filter(role='department_rep').exists()
+        return 'ready' if has_rep else 'needs_representative'
 
 class VenueAreaSerializer(serializers.ModelSerializer):
     class Meta:
