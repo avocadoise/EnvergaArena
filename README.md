@@ -10,7 +10,7 @@ Official Intramurals Registration, Results, and Medal Tally System for Manuel S.
   - **Admin**: Manage events, schedules, venues, approve registrations, verify results, and monitor AI logs.
   - **Department Rep**: Manage athlete masterlists, submit event registrations, and track approval status.
 - **Dynamic Event Modeling**: Supports both `match_based` (e.g., Basketball, Esports) and `rank_based` (e.g., Swimming, Dancesport) result families.
-- **Medal-Priority Ranking**: Departments rank by gold medals first, then silver, then bronze; points use the configurable demo default of Gold=5, Silver=3, Bronze=1.
+- **Medal-Priority Ranking**: Departments rank by gold medals first, then silver, then bronze. No weighted points are displayed or used for ranking.
 - **Immutable Audit Trail**: Medal records are ledger-based to prevent silent overwrites.
 
 ## Tech Stack
