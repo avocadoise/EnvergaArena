@@ -867,7 +867,7 @@ function scheduleHasDepartment(schedule: EventSchedule, departmentId: number | n
 }
 
 function labelize(value: string) {
-    return value.replace('_', ' ');
+    return value.replaceAll('_', ' ');
 }
 
 function formatScheduleDate(value?: string | null) {
