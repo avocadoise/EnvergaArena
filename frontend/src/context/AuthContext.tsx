@@ -2,7 +2,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { jwtDecode } from 'jwt-decode';
-import { AUTH_STORAGE_EVENT, clearTokens, getAccessToken } from '../services/auth';
+import { AUTH_STORAGE_EVENT, clearLegacyStoredTokens, clearTokens, getAccessToken, setAccessToken } from '../services/auth';
+import { logoutRequest, refreshAccessToken } from '../services/api';
 
 export type UserRole = 'admin' | 'department_rep' | 'none';
 
@@ -50,7 +51,7 @@ const getStoredUser = () => {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<DecodedUser | null>(() => getStoredUser());
-    const [isLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const syncAuthState = () => {
@@ -66,6 +67,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         };
     }, []);
 
+    useEffect(() => {
+        let isMounted = true;
+        clearLegacyStoredTokens();
+
+        refreshAccessToken()
+            .then(access => {
+                if (!isMounted) return;
+                const decoded = jwtDecode<DecodedUser>(access);
+                if (isTokenExpired(decoded)) {
+                    clearTokens();
+                    setUser(null);
+                    return;
+                }
+                setUser(decoded);
+            })
+            .catch(() => {
+                if (!isMounted) return;
+                setUser(null);
+            })
+            .finally(() => {
+                if (isMounted) setIsLoading(false);
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
     const loginState = (access: string) => {
         try {
             const decoded = jwtDecode<DecodedUser>(access);
@@ -74,6 +103,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 setUser(null);
                 return;
             }
+            setAccessToken(access);
             setUser(decoded);
         } catch {
             console.error("Invalid token format");
@@ -81,8 +111,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const logoutState = () => {
-        clearTokens();
         setUser(null);
+        void logoutRequest();
     };
 
     return (

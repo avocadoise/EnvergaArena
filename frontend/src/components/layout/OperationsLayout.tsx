@@ -21,6 +21,7 @@ import {
     MapPinned,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import DepartmentLogo from '../DepartmentLogo';
 
 const adminItems = [
     { to: '/admin', label: 'Dashboard', icon: LayoutDashboard },
@@ -93,9 +94,17 @@ export default function OperationsLayout({ mode }: { mode: 'admin' | 'department
                         </button>
                         <div className="dropdown dropdown-end">
                             <button tabIndex={0} className="btn btn-ghost min-h-10 px-2">
-                                <span className="grid h-8 w-8 place-items-center rounded-full bg-maroon text-sm font-black text-white">
-                                    {user?.username?.slice(0, 1).toUpperCase()}
-                                </span>
+                                {mode === 'admin' ? (
+                                    <span className="grid h-8 w-8 place-items-center rounded-full bg-maroon text-sm font-black text-white">
+                                        {user?.username?.slice(0, 1).toUpperCase()}
+                                    </span>
+                                ) : (
+                                    <DepartmentLogo
+                                        acronym={user?.department_acronym}
+                                        name={user?.department_name}
+                                        className="h-8 w-8"
+                                    />
+                                )}
                                 <span className="hidden text-left md:block">
                                     <span className="block text-sm font-bold">{user?.username}</span>
                                     <span className="block text-xs text-gray-500">
