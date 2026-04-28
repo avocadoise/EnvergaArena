@@ -72,7 +72,6 @@ export interface PodiumResult {
     department_acronym: string;
     rank: number;
     medal: 'gold' | 'silver' | 'bronze' | 'none';
-    points_awarded: number;
     is_final: boolean;
     recorded_at: string;
     updated_at: string;
@@ -88,8 +87,25 @@ export interface MedalTally {
     silver: number;
     bronze: number;
     total_medals: number;
-    total_points: number;
     last_updated: string;
+}
+
+export interface PublicNewsArticle {
+    id: number;
+    title: string;
+    slug: string;
+    summary: string;
+    body_md: string;
+    article_type: 'announcement' | 'schedule_update' | 'highlight' | 'result_recap' | 'general_news';
+    source_label: string;
+    event: number | null;
+    event_name?: string | null;
+    department: number | null;
+    department_name?: string | null;
+    published_at: string | null;
+    ai_generated: boolean;
+    created_at: string;
+    updated_at: string;
 }
 
 // --- Hooks ---
@@ -130,5 +146,26 @@ export const useMedalTally = () => {
             const { data } = await api.get('/public/medal-tally/');
             return data;
         },
+    });
+};
+
+export const usePublishedNews = () => {
+    return useQuery<PublicNewsArticle[]>({
+        queryKey: ['published-news'],
+        queryFn: async () => {
+            const { data } = await api.get('/public/news/');
+            return data;
+        },
+    });
+};
+
+export const usePublishedNewsArticle = (slug?: string) => {
+    return useQuery<PublicNewsArticle>({
+        queryKey: ['published-news', slug],
+        queryFn: async () => {
+            const { data } = await api.get(`/public/news/${slug}/`);
+            return data;
+        },
+        enabled: Boolean(slug),
     });
 };
