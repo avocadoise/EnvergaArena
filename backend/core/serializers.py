@@ -1,9 +1,30 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework_simplejwt.views import TokenObtainPairView
 from django.utils import timezone
 from django.utils.text import slugify
 from .models import Department, Venue, VenueArea, UserProfile, NewsArticle
+
+
+def get_user_auth_payload(user):
+    try:
+        profile = user.profile
+        return {
+            'user_id': user.id,
+            'username': user.username,
+            'role': profile.role,
+            'department_id': profile.department_id if profile.department else None,
+            'department_name': profile.department.name if profile.department else None,
+            'department_acronym': profile.department.acronym if profile.department else None,
+        }
+    except UserProfile.DoesNotExist:
+        return {
+            'user_id': user.id,
+            'username': user.username,
+            'role': 'admin' if user.is_staff or user.is_superuser else 'none',
+            'department_id': None,
+            'department_name': None,
+            'department_acronym': None,
+        }
 
 class DepartmentSerializer(serializers.ModelSerializer):
     representative_name = serializers.SerializerMethodField()
@@ -39,7 +60,11 @@ class VenueSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Venue
-        fields = ['id', 'name', 'location', 'areas', 'created_at', 'updated_at']
+        fields = [
+            'id', 'name', 'campus', 'building', 'address', 'location',
+            'is_indoor', 'is_active', 'notes',
+            'areas', 'created_at', 'updated_at',
+        ]
 
 
 class NewsArticleBaseSerializer(serializers.ModelSerializer):
@@ -87,24 +112,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-
-        # Add custom claims
-        token['username'] = user.username
-        
-        # Check for UserProfile
-        try:
-            profile = user.profile
-            token['role'] = profile.role
-            token['department_id'] = profile.department_id if profile.department else None
-            token['department_name'] = profile.department.name if profile.department else None
-            token['department_acronym'] = profile.department.acronym if profile.department else None
-        except UserProfile.DoesNotExist:
-            token['role'] = 'admin' if user.is_staff or user.is_superuser else 'none'
-            token['department_id'] = None
-            token['department_name'] = None
-            token['department_acronym'] = None
+        for key, value in get_user_auth_payload(user).items():
+            if key != 'user_id':
+                token[key] = value
 
         return token
-
-class CustomTokenObtainPairView(TokenObtainPairView):
-    serializer_class = CustomTokenObtainPairSerializer

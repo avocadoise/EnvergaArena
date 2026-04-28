@@ -51,12 +51,42 @@ class AdminNewsSmokeTests(APITestCase):
         }, format='json')
         self.assertEqual(response.status_code, 200)
         self.assertIn('access', response.data)
+        self.assertNotIn('refresh', response.data)
+        self.assertIn('enverga_refresh', response.cookies)
 
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
         news_response = self.client.get('/api/admin/news/')
 
         self.assertEqual(news_response.status_code, 200)
         self.assertEqual(len(news_response.data), 2)
+
+    def test_refresh_uses_httponly_cookie_and_returns_access_only(self):
+        login_response = self.client.post('/api/auth/login/', {
+            'username': 'admin',
+            'password': 'demo1234',
+        }, format='json')
+        self.assertEqual(login_response.status_code, 200)
+        self.assertIn('enverga_refresh', login_response.cookies)
+        self.assertTrue(login_response.cookies['enverga_refresh']['httponly'])
+
+        refresh_response = self.client.post('/api/auth/refresh/', {}, format='json')
+
+        self.assertEqual(refresh_response.status_code, 200)
+        self.assertIn('access', refresh_response.data)
+        self.assertNotIn('refresh', refresh_response.data)
+
+    def test_logout_clears_refresh_cookie(self):
+        login_response = self.client.post('/api/auth/login/', {
+            'username': 'admin',
+            'password': 'demo1234',
+        }, format='json')
+        self.assertEqual(login_response.status_code, 200)
+
+        logout_response = self.client.post('/api/auth/logout/', {}, format='json')
+
+        self.assertEqual(logout_response.status_code, 200)
+        self.assertIn('enverga_refresh', logout_response.cookies)
+        self.assertEqual(logout_response.cookies['enverga_refresh'].value, '')
 
     def test_department_rep_cannot_access_admin_news(self):
         self.client.force_authenticate(user=self.rep)

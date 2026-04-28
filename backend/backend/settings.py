@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -24,6 +25,15 @@ load_dotenv(BASE_DIR.parent / '.env')
 
 def env_value(name, default=''):
     return os.getenv(name, default).strip()
+
+
+def env_bool(name, default=False):
+    value = env_value(name, str(default)).lower()
+    return value in {'1', 'true', 'yes', 'on'}
+
+
+def env_int(name, default):
+    return int(env_value(name, str(default)))
 
 
 # Quick-start development settings - unsuitable for production
@@ -151,6 +161,12 @@ CORS_ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
+CORS_ALLOW_CREDENTIALS = env_bool('CORS_ALLOW_CREDENTIALS', True)
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in env_value('CSRF_TRUSTED_ORIGINS').split(',')
+    if origin.strip()
+]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -160,6 +176,23 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ),
 }
+
+SIMPLE_JWT = {
+    'SIGNING_KEY': env_value('JWT_SECRET_KEY', SECRET_KEY),
+    'ALGORITHM': env_value('JWT_ALGORITHM', 'HS256'),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=env_int('JWT_ACCESS_TOKEN_LIFETIME_MINUTES', 15)),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=env_int('JWT_REFRESH_TOKEN_LIFETIME_DAYS', 7)),
+    'ROTATE_REFRESH_TOKENS': env_bool('JWT_ROTATE_REFRESH_TOKENS', False),
+    'BLACKLIST_AFTER_ROTATION': env_bool('JWT_BLACKLIST_AFTER_ROTATION', False),
+    'UPDATE_LAST_LOGIN': env_bool('JWT_UPDATE_LAST_LOGIN', True),
+}
+
+JWT_REFRESH_COOKIE_NAME = env_value('JWT_REFRESH_COOKIE_NAME', 'enverga_refresh')
+JWT_REFRESH_COOKIE_SECURE = env_bool('JWT_REFRESH_COOKIE_SECURE', not DEBUG)
+JWT_REFRESH_COOKIE_HTTPONLY = env_bool('JWT_REFRESH_COOKIE_HTTPONLY', True)
+JWT_REFRESH_COOKIE_SAMESITE = env_value('JWT_REFRESH_COOKIE_SAMESITE', 'Lax')
+JWT_REFRESH_COOKIE_DOMAIN = env_value('JWT_REFRESH_COOKIE_DOMAIN') or None
+JWT_REFRESH_COOKIE_PATH = env_value('JWT_REFRESH_COOKIE_PATH', '/')
 
 TURNSTILE_SECRET_KEY = env_value('TURNSTILE_SECRET_KEY')
 BREVO_API_KEY = env_value('BREVO_API_KEY')

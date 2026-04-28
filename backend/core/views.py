@@ -1,13 +1,94 @@
 from django.utils import timezone
-from rest_framework import permissions, viewsets
+from django.conf import settings
+from rest_framework import permissions, status, viewsets
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .models import Department, Venue, VenueArea, NewsArticle
 from .serializers import (
+    CustomTokenObtainPairSerializer,
     DepartmentSerializer,
+    get_user_auth_payload,
     NewsArticleAdminSerializer,
     NewsArticlePublicSerializer,
     VenueSerializer,
     VenueAreaSerializer,
 )
+
+
+def _refresh_cookie_kwargs():
+    return {
+        'httponly': settings.JWT_REFRESH_COOKIE_HTTPONLY,
+        'secure': settings.JWT_REFRESH_COOKIE_SECURE,
+        'samesite': settings.JWT_REFRESH_COOKIE_SAMESITE,
+        'path': settings.JWT_REFRESH_COOKIE_PATH,
+        'domain': settings.JWT_REFRESH_COOKIE_DOMAIN,
+    }
+
+
+def set_refresh_cookie(response, refresh_token):
+    response.set_cookie(
+        settings.JWT_REFRESH_COOKIE_NAME,
+        str(refresh_token),
+        max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()),
+        **_refresh_cookie_kwargs(),
+    )
+
+
+def clear_refresh_cookie(response):
+    response.delete_cookie(
+        settings.JWT_REFRESH_COOKIE_NAME,
+        path=settings.JWT_REFRESH_COOKIE_PATH,
+        domain=settings.JWT_REFRESH_COOKIE_DOMAIN,
+        samesite=settings.JWT_REFRESH_COOKIE_SAMESITE,
+    )
+
+
+class CookieTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        refresh = response.data.pop('refresh', None)
+        if refresh:
+            set_refresh_cookie(response, refresh)
+        return response
+
+
+class CookieTokenRefreshView(TokenRefreshView):
+    def post(self, request, *args, **kwargs):
+        refresh = request.COOKIES.get(settings.JWT_REFRESH_COOKIE_NAME)
+        if not refresh:
+            return Response({'detail': 'Refresh session cookie was not found.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        serializer = self.get_serializer(data={'refresh': refresh})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as exc:
+            raise InvalidToken(exc.args[0])
+
+        response = Response(serializer.validated_data, status=status.HTTP_200_OK)
+        new_refresh = response.data.pop('refresh', None)
+        if new_refresh:
+            set_refresh_cookie(response, new_refresh)
+        return response
+
+
+class LogoutView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        response = Response({'detail': 'Logged out.'}, status=status.HTTP_200_OK)
+        clear_refresh_cookie(response)
+        return response
+
+
+class CurrentUserView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        return Response(get_user_auth_payload(request.user))
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):

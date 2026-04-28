@@ -14,7 +14,13 @@ class Department(models.Model):
 
 class Venue(models.Model):
     name = models.CharField(max_length=255, unique=True)
+    campus = models.CharField(max_length=120, blank=True)
+    building = models.CharField(max_length=120, blank=True)
+    address = models.TextField(blank=True)
     location = models.TextField(blank=True)
+    is_indoor = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
