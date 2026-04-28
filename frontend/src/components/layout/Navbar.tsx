@@ -1,9 +1,13 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Trophy, Calendar, Users, Home, LogIn, LayoutDashboard, LogOut, Bot } from 'lucide-react';
+import { Trophy, Calendar, Users, Home, LogIn, LayoutDashboard, LogOut, Bot, FileText, Newspaper } from 'lucide-react';
 
 export default function Navbar() {
     const { isAuthenticated, user, logoutState } = useAuth();
+    const isAdmin = user?.role === 'admin';
+    const isDepartmentRep = user?.role === 'department_rep';
+    const portalPath = isAdmin ? '/admin' : '/portal';
+    const portalLabel = isAdmin ? 'Admin Dashboard' : 'Department Portal';
 
     return (
         <div className="navbar bg-maroon text-white shadow-xl px-4 md:px-8 z-50 sticky top-0">
@@ -14,9 +18,19 @@ export default function Navbar() {
                     </div>
                     <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52 text-charcoal">
                         <li><NavLink to="/"><Home className="w-4 h-4"/> Home</NavLink></li>
+                        <li><NavLink to="/news"><Newspaper className="w-4 h-4"/> News</NavLink></li>
                         <li><NavLink to="/schedules"><Calendar className="w-4 h-4"/> Schedules</NavLink></li>
                         <li><NavLink to="/results"><Trophy className="w-4 h-4"/> Results & Tally</NavLink></li>
                         <li><NavLink to="/rooney"><Bot className="w-4 h-4"/> Rooney AI</NavLink></li>
+                        <li><NavLink to="/tryouts"><FileText className="w-4 h-4"/> Tryout Apply</NavLink></li>
+                        {isAuthenticated && (
+                            <>
+                                <li><NavLink to={portalPath}><LayoutDashboard className="w-4 h-4"/> {portalLabel}</NavLink></li>
+                                {isDepartmentRep && (
+                                    <li><NavLink to="/portal/masterlist"><Users className="w-4 h-4"/> Masterlist</NavLink></li>
+                                )}
+                            </>
+                        )}
                     </ul>
                 </div>
                 <NavLink to="/" className="btn btn-ghost text-xl font-bold tracking-tight text-white hover:bg-white/10">
@@ -27,9 +41,19 @@ export default function Navbar() {
             <div className="navbar-center hidden lg:flex">
                 <ul className="menu menu-horizontal px-1 font-medium text-white/90">
                     <li><NavLink to="/" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><Home className="w-4 h-4 mr-1"/> Home</NavLink></li>
+                    <li><NavLink to="/news" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><Newspaper className="w-4 h-4 mr-1"/> News</NavLink></li>
                     <li><NavLink to="/schedules" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><Calendar className="w-4 h-4 mr-1"/> Schedules</NavLink></li>
                     <li><NavLink to="/results" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><Trophy className="w-4 h-4 mr-1"/> Results</NavLink></li>
                     <li><NavLink to="/rooney" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><Bot className="w-4 h-4 mr-1"/> Rooney AI</NavLink></li>
+                    <li><NavLink to="/tryouts" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><FileText className="w-4 h-4 mr-1"/> Tryouts</NavLink></li>
+                    {isAuthenticated && (
+                        <>
+                            <li><NavLink to={portalPath} className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><LayoutDashboard className="w-4 h-4 mr-1"/> {portalLabel}</NavLink></li>
+                            {isDepartmentRep && (
+                                <li><NavLink to="/portal/masterlist" className={({isActive}) => isActive ? "text-white bg-white/15 font-semibold" : "hover:text-white hover:bg-white/10"}><Users className="w-4 h-4 mr-1"/> Masterlist</NavLink></li>
+                            )}
+                        </>
+                    )}
                 </ul>
             </div>
             
@@ -46,7 +70,10 @@ export default function Navbar() {
                         </div>
                         <ul tabIndex={0} className="mt-3 z-[1] p-2 shadow menu menu-sm dropdown-content bg-base-100 rounded-box w-52 text-charcoal">
                             <li className="menu-title px-4 py-2 opacity-60">Role: {user?.role}</li>
-                            <li><NavLink to="/admin"><LayoutDashboard className="w-4 h-4"/> Dashboard</NavLink></li>
+                            <li><NavLink to={portalPath}><LayoutDashboard className="w-4 h-4"/> {portalLabel}</NavLink></li>
+                            {isDepartmentRep && (
+                                <li><NavLink to="/portal/masterlist"><Users className="w-4 h-4"/> Masterlist</NavLink></li>
+                            )}
                             <li><button onClick={logoutState} className="text-error"><LogOut className="w-4 h-4"/> Logout</button></li>
                         </ul>
                     </div>
