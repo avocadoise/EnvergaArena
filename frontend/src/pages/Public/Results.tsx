@@ -14,7 +14,7 @@ export default function Results() {
                         <Trophy className="w-8 h-8 text-gold"/> Official Results
                     </h1>
                     <p className="text-sm text-gray-600 mt-1">
-                        Leaderboard ranks compare gold first, then silver, then bronze. Points use the demo 5/3/1 formula.
+                        Leaderboard ranks compare gold first, then silver, then bronze.
                     </p>
                 </div>
                 
@@ -49,7 +49,7 @@ function MedalTallyTab() {
         <div className="space-y-3">
             <div className="alert bg-base-100 border-base-300 text-charcoal">
                 <span>
-                    Rank is medal-priority: Gold, then Silver, then Bronze. Total medals and points are shown for context.
+                    Rank is medal-priority: Gold, then Silver, then Bronze. Total medals are shown for context.
                 </span>
             </div>
             <div className="overflow-x-auto bg-base-100 rounded-xl shadow-lg border border-base-200">
@@ -62,7 +62,6 @@ function MedalTallyTab() {
                             <th><Medal className="w-5 h-5 mx-auto"/> Silver</th>
                             <th><Medal className="w-5 h-5 mx-auto"/> Bronze</th>
                             <th>Total Medals</th>
-                            <th className="font-bold">Points</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -85,12 +84,11 @@ function MedalTallyTab() {
                                 <td className="font-bold text-gray-700">{row.silver}</td>
                                 <td className="font-bold text-amber-700">{row.bronze}</td>
                                 <td className="font-semibold">{row.total_medals}</td>
-                                <td className="font-bold text-maroon text-lg">{row.total_points}</td>
                             </tr>
                         ))}
                         {(!tally || tally.length === 0) && (
                             <tr>
-                                <td colSpan={7} className="text-center py-10 text-gray-500">
+                                <td colSpan={6} className="text-center py-10 text-gray-500">
                                     No medal records found.
                                 </td>
                             </tr>
