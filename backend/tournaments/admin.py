@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    EventSchedule, Athlete, EventRegistration, RosterEntry,
+    EventSchedule, Athlete, EmailVerificationCode, TryoutApplication, EventRegistration, RosterEntry,
     MatchResult, MatchSetScore,
     PodiumResult, MedalRecord, MedalTally,
 )
@@ -29,6 +29,22 @@ class AthleteAdmin(admin.ModelAdmin):
     list_display = ['student_number', 'full_name', 'department', 'program_course', 'year_level', 'is_enrolled', 'medical_cleared']
     list_filter = ['department', 'is_enrolled', 'medical_cleared']
     search_fields = ['full_name', 'student_number']
+
+
+@admin.register(EmailVerificationCode)
+class EmailVerificationCodeAdmin(admin.ModelAdmin):
+    list_display = ['email', 'student_number', 'department', 'schedule', 'expires_at', 'used_at', 'attempt_count']
+    list_filter = ['department', 'schedule__event', 'used_at']
+    search_fields = ['email', 'student_number']
+    readonly_fields = ['code_hash', 'created_at']
+
+
+@admin.register(TryoutApplication)
+class TryoutApplicationAdmin(admin.ModelAdmin):
+    list_display = ['full_name', 'student_number', 'department', 'schedule', 'email_verified', 'status', 'submitted_at', 'converted_athlete']
+    list_filter = ['department', 'status', 'email_verified', 'schedule__event']
+    search_fields = ['full_name', 'student_number', 'school_email']
+
 
 @admin.register(EventRegistration)
 class EventRegistrationAdmin(admin.ModelAdmin):
@@ -59,5 +75,5 @@ class MedalRecordAdmin(admin.ModelAdmin):
 
 @admin.register(MedalTally)
 class MedalTallyAdmin(admin.ModelAdmin):
-    list_display = ['department', 'gold', 'silver', 'bronze', 'total_points', 'last_updated']
-    readonly_fields = ['gold', 'silver', 'bronze', 'total_points', 'last_updated']
+    list_display = ['department', 'gold', 'silver', 'bronze', 'last_updated']
+    readonly_fields = ['gold', 'silver', 'bronze', 'last_updated']
