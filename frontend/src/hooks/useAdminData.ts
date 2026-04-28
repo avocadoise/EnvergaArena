@@ -182,6 +182,18 @@ export interface CreateRegistrationPayload {
     roster_athlete_ids: number[];
 }
 
+export interface SchedulePayload {
+    event: number;
+    phase?: string;
+    round_label?: string;
+    scheduled_start?: string | null;
+    scheduled_end?: string | null;
+    venue?: number | null;
+    venue_area?: number | null;
+    status?: 'scheduled' | 'live' | 'completed' | 'postponed' | 'cancelled';
+    notes?: string;
+}
+
 // Hooks
 export const useDepartments = () => {
     return useQuery<Department[]>({
@@ -232,6 +244,32 @@ export const useEvents = () => {
         queryFn: async () => {
             const { data } = await api.get('/public/events/');
             return data;
+        },
+    });
+};
+
+export const useCreateSchedule = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (payload: SchedulePayload) => {
+            const { data } = await api.post('/public/schedules/', payload);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schedules'] });
+        },
+    });
+};
+
+export const useUpdateSchedule = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ id, ...payload }: Partial<SchedulePayload> & { id: number }) => {
+            const { data } = await api.patch(`/public/schedules/${id}/`, payload);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['schedules'] });
         },
     });
 };

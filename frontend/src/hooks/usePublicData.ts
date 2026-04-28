@@ -29,9 +29,14 @@ export interface EventSchedule {
     venue_name: string | null;
     venue_area: number | null;
     venue_area_name: string | null;
+    phase: string;
+    round_label: string;
     scheduled_start: string | null;
     scheduled_end: string | null;
+    status: 'scheduled' | 'live' | 'completed' | 'postponed' | 'cancelled';
     notes: string;
+    official_notes?: string;
+    has_result_data?: boolean;
     participants: EventParticipant[];
     created_at: string;
     updated_at: string;

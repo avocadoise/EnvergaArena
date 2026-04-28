@@ -19,6 +19,7 @@ import {
     useAthletes,
     useApproveAIRecap,
     useCreateAdminNews,
+    useCreateSchedule,
     useCreateVenue,
     useDepartments,
     useDiscardAIRecap,
@@ -31,12 +32,28 @@ import {
     useUpdateAIRecap,
     useUpdateAdminNews,
     useUpdateRegistrationStatus,
+    useUpdateSchedule,
     useVenues,
 } from '../../hooks/useAdminData';
-import type { AIRecap, EventRegistration, NewsArticle } from '../../hooks/useAdminData';
+import type { AIRecap, EventRegistration, NewsArticle, SchedulePayload } from '../../hooks/useAdminData';
 import { useMatchResults, useMedalTally, usePodiumResults, useSchedules } from '../../hooks/usePublicData';
 import type { EventSchedule } from '../../hooks/usePublicData';
 import DepartmentLogo from '../../components/DepartmentLogo';
+
+type ScheduleStatus = 'scheduled' | 'live' | 'completed' | 'postponed' | 'cancelled';
+
+interface ScheduleFormState {
+    id?: number;
+    event: string;
+    phase: string;
+    round_label: string;
+    scheduled_start: string;
+    scheduled_end: string;
+    venue: string;
+    venue_area: string;
+    status: ScheduleStatus;
+    notes: string;
+}
 
 export function DepartmentsPage() {
     const { data: departments, isLoading } = useDepartments();
@@ -375,11 +392,71 @@ export function EventsPage() {
 
 export function SchedulesAdminPage() {
     const { data: schedules, isLoading } = useSchedules();
+    const { data: events } = useEvents();
+    const { data: venues } = useVenues();
+    const createSchedule = useCreateSchedule();
+    const updateSchedule = useUpdateSchedule();
     const [status, setStatus] = useState('all');
-    const rows = (schedules || []).filter(schedule => status === 'all' || schedule.event_status === status);
+    const [query, setQuery] = useState('');
+    const [selected, setSelected] = useState<EventSchedule | null>(null);
+    const [editor, setEditor] = useState<ScheduleFormState | null>(null);
+    const rows = (schedules || []).filter(schedule => {
+        const scheduleStatus = getScheduleStatus(schedule);
+        const matchesStatus = status === 'all' || scheduleStatus === status;
+        const matchesQuery = `${schedule.event_name} ${schedule.event_category} ${schedule.venue_name || ''} ${schedule.venue_area_name || ''}`.toLowerCase().includes(query.toLowerCase());
+        return matchesStatus && matchesQuery;
+    });
+    const activeSchedule = editor?.id ? schedules?.find(schedule => schedule.id === editor.id) || null : null;
+    const selectedVenueId = Number(editor?.venue || 0);
+    const venueAreas = venues?.flatMap(venue => venue.areas.map(area => ({ ...area, venue_name: venue.name }))) || [];
+    const filteredVenueAreas = venueAreas.filter(area => !selectedVenueId || area.venue === selectedVenueId);
+    const conflict = editor ? findScheduleConflict(editor, schedules || []) : null;
+    const mutationError = createSchedule.error || updateSchedule.error;
+    const apiError = getApiErrorMessage(mutationError);
+
+    const openCreate = () => {
+        setSelected(null);
+        setEditor(createEmptyScheduleForm());
+    };
+
+    const openEdit = (schedule: EventSchedule) => {
+        setSelected(schedule);
+        setEditor(scheduleToForm(schedule));
+    };
+
+    const patchStatus = (schedule: EventSchedule, nextStatus: SchedulePayload['status']) => {
+        if (schedule.status === 'completed' || schedule.has_result_data) {
+            const confirmed = window.confirm('This schedule is completed or has linked result data. Continue with the status change?');
+            if (!confirmed) return;
+        }
+        updateSchedule.mutate({ id: schedule.id, status: nextStatus });
+    };
+
+    const saveSchedule = (event: FormEvent) => {
+        event.preventDefault();
+        if (!editor || conflict) return;
+        if (activeSchedule && (activeSchedule.status === 'completed' || activeSchedule.has_result_data)) {
+            const confirmed = window.confirm('You are editing a completed schedule or one with linked result data. Continue and preserve the correction in the updated schedule record?');
+            if (!confirmed) return;
+        }
+
+        const payload = formToSchedulePayload(editor);
+        if (editor.id) {
+            updateSchedule.mutate(
+                { id: editor.id, ...payload },
+                { onSuccess: schedule => { setSelected(schedule); setEditor(null); } },
+            );
+            return;
+        }
+
+        createSchedule.mutate(payload as SchedulePayload, {
+            onSuccess: schedule => { setSelected(schedule); setEditor(null); },
+        });
+    };
 
     return (
-        <SectionShell title="Schedules">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <SectionShell title="Schedules" searchValue={query} onSearch={setQuery}>
             <FilterRow>
                 <select className="select select-bordered select-sm" value={status} onChange={event => setStatus(event.target.value)}>
                     <option value="all">All statuses</option>
@@ -387,7 +464,12 @@ export function SchedulesAdminPage() {
                     <option value="live">Live</option>
                     <option value="completed">Completed</option>
                     <option value="postponed">Postponed</option>
+                    <option value="cancelled">Cancelled</option>
                 </select>
+                <button className="btn btn-sm bg-maroon text-white hover:bg-maroon-dark" onClick={openCreate}>
+                    <Plus className="h-4 w-4" />
+                    Add Schedule
+                </button>
             </FilterRow>
             <TableState isLoading={isLoading} isEmpty={rows.length === 0}>
                 <table className="table">
@@ -395,27 +477,193 @@ export function SchedulesAdminPage() {
                         <tr>
                             <th>Event</th>
                             <th>Category</th>
+                            <th>Phase</th>
                             <th>Start</th>
                             <th>End</th>
                             <th>Venue Area</th>
                             <th>Status</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {rows.map(schedule => (
-                            <tr key={schedule.id}>
+                            <tr key={schedule.id} className="hover">
                                 <td className="font-semibold">{schedule.event_name}</td>
                                 <td>{schedule.event_category}</td>
+                                <td>
+                                    <div className="font-semibold">{schedule.phase || 'General'}</div>
+                                    {schedule.round_label && <div className="text-xs text-gray-600">{schedule.round_label}</div>}
+                                </td>
                                 <td>{formatDate(schedule.scheduled_start)}</td>
                                 <td>{formatDate(schedule.scheduled_end)}</td>
                                 <td>{schedule.venue_name} {schedule.venue_area_name && `- ${schedule.venue_area_name}`}</td>
-                                <td><StatusChip status={schedule.event_status} /></td>
+                                <td><StatusChip status={getScheduleStatus(schedule)} /></td>
+                                <td>
+                                    <div className="flex flex-wrap gap-2">
+                                        <button className="btn btn-xs" onClick={() => setSelected(schedule)}>
+                                            <Eye className="h-3.5 w-3.5" />
+                                            View
+                                        </button>
+                                        <button className="btn btn-xs border-maroon text-maroon hover:bg-maroon hover:text-white" onClick={() => openEdit(schedule)}>
+                                            Edit
+                                        </button>
+                                        {getScheduleStatus(schedule) !== 'postponed' && (
+                                            <button className="btn btn-xs btn-warning" onClick={() => patchStatus(schedule, 'postponed')}>
+                                                Postpone
+                                            </button>
+                                        )}
+                                        {getScheduleStatus(schedule) !== 'cancelled' && (
+                                            <button className="btn btn-xs btn-error text-white" onClick={() => patchStatus(schedule, 'cancelled')}>
+                                                Cancel
+                                            </button>
+                                        )}
+                                    </div>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </TableState>
         </SectionShell>
+        <aside className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
+            {selected ? (
+                <div className="space-y-4">
+                    <div>
+                        <h3 className="text-xl font-black text-charcoal">{selected.event_name}</h3>
+                        <p className="text-sm text-gray-600">{selected.event_category}</p>
+                    </div>
+                    {(selected.status === 'completed' || selected.has_result_data) && (
+                        <div className="alert alert-warning py-3 text-sm">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>Completed or result-linked schedules should only be changed after confirming the correction.</span>
+                        </div>
+                    )}
+                    <div className="space-y-2 text-sm">
+                        <InfoRow label="Phase" value={selected.phase || 'General'} />
+                        <InfoRow label="Round" value={selected.round_label || 'Not set'} />
+                        <InfoRow label="Start" value={formatDate(selected.scheduled_start)} />
+                        <InfoRow label="End" value={formatDate(selected.scheduled_end)} />
+                        <InfoRow label="Venue" value={selected.venue_area_name ? `${selected.venue_name || 'Venue TBA'} - ${selected.venue_area_name}` : selected.venue_name || 'Venue TBA'} />
+                        <InfoRow label="Status" value={labelize(getScheduleStatus(selected))} />
+                        <InfoRow label="Registrations" value={String(selected.participants.length)} />
+                    </div>
+                    {selected.notes && (
+                        <div className="rounded-md bg-base-200 p-3">
+                            <div className="text-xs font-bold uppercase text-gray-500">Official notes</div>
+                            <p className="mt-1 text-sm text-charcoal">{selected.notes}</p>
+                        </div>
+                    )}
+                    <button className="btn w-full bg-maroon text-white hover:bg-maroon-dark" onClick={() => openEdit(selected)}>
+                        Edit Schedule
+                    </button>
+                </div>
+            ) : (
+                <EmptyPanel title="No schedule selected" text="View or edit a row to inspect venue, status, and operational notes." />
+            )}
+        </aside>
+        {editor && (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+                <form className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-base-100 p-6 shadow-2xl" onSubmit={saveSchedule}>
+                    <div className="mb-5 flex items-start justify-between gap-4">
+                        <div>
+                            <h3 className="text-2xl font-black text-charcoal">{editor.id ? 'Edit Schedule' : 'Add Schedule'}</h3>
+                            <p className="text-sm text-gray-600">Manage slot timing, phase, venue assignment, and operational status.</p>
+                        </div>
+                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditor(null)}>Close</button>
+                    </div>
+                    {activeSchedule?.status === 'live' && (
+                        <div className="alert alert-warning mb-4 text-sm">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>This schedule is live. Changes to time, venue, venue area, or status should be coordinated with the operations desk.</span>
+                        </div>
+                    )}
+                    {(activeSchedule?.status === 'completed' || activeSchedule?.has_result_data) && (
+                        <div className="alert alert-error mb-4 text-sm text-white">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>This schedule is completed or has result data. Saving will ask for confirmation.</span>
+                        </div>
+                    )}
+                    {conflict && (
+                        <div className="alert alert-error mb-4 text-sm text-white">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>Venue conflict: {conflict.event_name} already uses {conflict.venue_area_name} from {formatDate(conflict.scheduled_start)} to {formatDate(conflict.scheduled_end)}.</span>
+                        </div>
+                    )}
+                    {apiError && (
+                        <div className="alert alert-warning mb-4 text-sm">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>{apiError}</span>
+                        </div>
+                    )}
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <label className="form-control md:col-span-2">
+                            <span className="label-text font-semibold">Event</span>
+                            <select className="select select-bordered" value={editor.event} onChange={event => setEditor({ ...editor, event: event.target.value })} required>
+                                <option value="">Select event</option>
+                                {(events || []).map(item => (
+                                    <option key={item.id} value={item.id}>{item.name} - {item.category_name}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Phase</span>
+                            <input className="input input-bordered" value={editor.phase} onChange={event => setEditor({ ...editor, phase: event.target.value })} placeholder="Elimination, semifinal, final" />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Round label</span>
+                            <input className="input input-bordered" value={editor.round_label} onChange={event => setEditor({ ...editor, round_label: event.target.value })} placeholder="Game 1, Heat 2, Finals" />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Start datetime</span>
+                            <input type="datetime-local" className="input input-bordered" value={editor.scheduled_start} onChange={event => setEditor({ ...editor, scheduled_start: event.target.value })} />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">End datetime</span>
+                            <input type="datetime-local" className="input input-bordered" value={editor.scheduled_end} onChange={event => setEditor({ ...editor, scheduled_end: event.target.value })} />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Venue</span>
+                            <select className="select select-bordered" value={editor.venue} onChange={event => setEditor({ ...editor, venue: event.target.value, venue_area: '' })}>
+                                <option value="">Venue TBA</option>
+                                {(venues || []).map(venue => (
+                                    <option key={venue.id} value={venue.id}>{venue.name}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Venue area</span>
+                            <select className="select select-bordered" value={editor.venue_area} onChange={event => setEditor({ ...editor, venue_area: event.target.value })}>
+                                <option value="">Area TBA</option>
+                                {filteredVenueAreas.map(area => (
+                                    <option key={area.id} value={area.id}>{area.venue_name} - {area.name}</option>
+                                ))}
+                            </select>
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Status</span>
+                            <select className="select select-bordered" value={editor.status} onChange={event => setEditor({ ...editor, status: event.target.value as ScheduleFormState['status'] })}>
+                                <option value="scheduled">Scheduled</option>
+                                <option value="live">Live</option>
+                                <option value="completed">Completed</option>
+                                <option value="postponed">Postponed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </label>
+                        <label className="form-control md:col-span-2">
+                            <span className="label-text font-semibold">Official notes</span>
+                            <textarea className="textarea textarea-bordered min-h-28" value={editor.notes} onChange={event => setEditor({ ...editor, notes: event.target.value })} placeholder="Operational notes, officiating reminders, or venue instructions" />
+                        </label>
+                    </div>
+                    <div className="mt-6 flex flex-wrap justify-end gap-2">
+                        <button type="button" className="btn" onClick={() => setEditor(null)}>Cancel</button>
+                        <button type="submit" className="btn bg-maroon text-white hover:bg-maroon-dark" disabled={Boolean(conflict) || createSchedule.isPending || updateSchedule.isPending}>
+                            {createSchedule.isPending || updateSchedule.isPending ? 'Saving...' : 'Save Schedule'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        )}
+        </div>
     );
 }
 
@@ -1424,6 +1672,103 @@ function formatDate(value?: string | null) {
     } catch {
         return 'TBA';
     }
+}
+
+function toDateTimeLocal(value?: string | null) {
+    if (!value) return '';
+    try {
+        return format(parseISO(value), "yyyy-MM-dd'T'HH:mm");
+    } catch {
+        return '';
+    }
+}
+
+function fromDateTimeLocal(value: string) {
+    return value ? new Date(value).toISOString() : null;
+}
+
+function getScheduleStatus(schedule: EventSchedule): ScheduleStatus {
+    return (schedule.status || schedule.event_status) as ScheduleStatus;
+}
+
+function createEmptyScheduleForm(): ScheduleFormState {
+    return {
+        event: '',
+        phase: '',
+        round_label: '',
+        scheduled_start: '',
+        scheduled_end: '',
+        venue: '',
+        venue_area: '',
+        status: 'scheduled',
+        notes: '',
+    };
+}
+
+function scheduleToForm(schedule: EventSchedule): ScheduleFormState {
+    return {
+        id: schedule.id,
+        event: String(schedule.event),
+        phase: schedule.phase || '',
+        round_label: schedule.round_label || '',
+        scheduled_start: toDateTimeLocal(schedule.scheduled_start),
+        scheduled_end: toDateTimeLocal(schedule.scheduled_end),
+        venue: schedule.venue ? String(schedule.venue) : '',
+        venue_area: schedule.venue_area ? String(schedule.venue_area) : '',
+        status: getScheduleStatus(schedule),
+        notes: schedule.official_notes || schedule.notes || '',
+    };
+}
+
+function formToSchedulePayload(form: ScheduleFormState): SchedulePayload {
+    return {
+        event: Number(form.event),
+        phase: form.phase.trim(),
+        round_label: form.round_label.trim(),
+        scheduled_start: fromDateTimeLocal(form.scheduled_start),
+        scheduled_end: fromDateTimeLocal(form.scheduled_end),
+        venue: form.venue ? Number(form.venue) : null,
+        venue_area: form.venue_area ? Number(form.venue_area) : null,
+        status: form.status,
+        notes: form.notes.trim(),
+    };
+}
+
+function findScheduleConflict(form: ScheduleFormState, schedules: EventSchedule[]) {
+    if (!form.venue_area || !form.scheduled_start || !form.scheduled_end || ['postponed', 'cancelled'].includes(form.status)) {
+        return null;
+    }
+
+    const start = new Date(form.scheduled_start).getTime();
+    const end = new Date(form.scheduled_end).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) return null;
+
+    return schedules.find(schedule => {
+        if (schedule.id === form.id) return false;
+        if (String(schedule.venue_area || '') !== form.venue_area) return false;
+        if (['postponed', 'cancelled'].includes(getScheduleStatus(schedule))) return false;
+        if (!schedule.scheduled_start || !schedule.scheduled_end) return false;
+        const existingStart = new Date(schedule.scheduled_start).getTime();
+        const existingEnd = new Date(schedule.scheduled_end).getTime();
+        return existingStart < end && existingEnd > start;
+    }) || null;
+}
+
+function getApiErrorMessage(error: unknown) {
+    if (!error || typeof error !== 'object') return '';
+    const response = 'response' in error ? (error as { response?: { data?: unknown } }).response : undefined;
+    const data = response?.data;
+    if (!data) return '';
+    if (typeof data === 'string') return data;
+    if (typeof data === 'object') {
+        if ('detail' in data && typeof (data as { detail?: unknown }).detail === 'string') {
+            return (data as { detail: string }).detail;
+        }
+        return Object.entries(data as Record<string, unknown>)
+            .map(([key, value]) => `${labelize(key)}: ${Array.isArray(value) ? value.join(', ') : String(value)}`)
+            .join(' ');
+    }
+    return '';
 }
 
 function slugify(value: string) {

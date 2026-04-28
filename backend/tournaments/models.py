@@ -5,11 +5,22 @@ from events.models import Event
 
 class EventSchedule(models.Model):
     """Links an Event to a specific venue, time slot, and participating departments."""
+    STATUS_CHOICES = [
+        ('scheduled', 'Scheduled'),
+        ('live', 'Live'),
+        ('completed', 'Completed'),
+        ('postponed', 'Postponed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='schedules')
     venue = models.ForeignKey(Venue, on_delete=models.SET_NULL, null=True, blank=True)
     venue_area = models.ForeignKey(VenueArea, on_delete=models.SET_NULL, null=True, blank=True)
+    phase = models.CharField(max_length=120, blank=True)
+    round_label = models.CharField(max_length=120, blank=True)
     scheduled_start = models.DateTimeField(null=True, blank=True)
     scheduled_end = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='scheduled')
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

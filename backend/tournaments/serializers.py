@@ -290,11 +290,13 @@ class EventScheduleSerializer(serializers.ModelSerializer):
     participants = serializers.SerializerMethodField()
     event_name = serializers.CharField(source='event.name', read_only=True)
     event_category = serializers.CharField(source='event.category.name', read_only=True)
-    event_status = serializers.CharField(source='event.status', read_only=True)
+    event_status = serializers.CharField(source='status', read_only=True)
     is_program_event = serializers.BooleanField(source='event.is_program_event', read_only=True)
     result_family = serializers.CharField(source='event.result_family', read_only=True)
-    venue_name = serializers.CharField(source='venue.name', read_only=True)
-    venue_area_name = serializers.CharField(source='venue_area.name', read_only=True)
+    venue_name = serializers.CharField(source='venue.name', read_only=True, allow_null=True)
+    venue_area_name = serializers.CharField(source='venue_area.name', read_only=True, allow_null=True)
+    official_notes = serializers.CharField(source='notes', required=False, allow_blank=True)
+    has_result_data = serializers.SerializerMethodField()
 
     class Meta:
         model = EventSchedule
@@ -302,7 +304,8 @@ class EventScheduleSerializer(serializers.ModelSerializer):
             'id', 'event', 'event_name', 'event_category', 'event_status',
             'is_program_event', 'result_family',
             'venue', 'venue_name', 'venue_area', 'venue_area_name',
-            'scheduled_start', 'scheduled_end', 'notes',
+            'phase', 'round_label', 'scheduled_start', 'scheduled_end',
+            'status', 'notes', 'official_notes', 'has_result_data',
             'participants',
             'created_at', 'updated_at',
         ]
@@ -311,20 +314,26 @@ class EventScheduleSerializer(serializers.ModelSerializer):
         venue_area = attrs.get('venue_area') or getattr(self.instance, 'venue_area', None)
         scheduled_start = attrs.get('scheduled_start') or getattr(self.instance, 'scheduled_start', None)
         scheduled_end = attrs.get('scheduled_end') or getattr(self.instance, 'scheduled_end', None)
-        event = attrs.get('event') or getattr(self.instance, 'event', None)
+        venue = attrs.get('venue') or getattr(self.instance, 'venue', None)
+        schedule_status = attrs.get('status') or getattr(self.instance, 'status', 'scheduled')
 
         if scheduled_start and scheduled_end and scheduled_start >= scheduled_end:
             raise serializers.ValidationError({
                 'scheduled_end': 'Schedule end must be later than schedule start.'
             })
 
-        if venue_area and scheduled_start and scheduled_end and event and event.status not in {'postponed', 'cancelled'}:
+        if venue_area and venue and venue_area.venue_id != venue.id:
+            raise serializers.ValidationError({
+                'venue_area': 'Selected venue area does not belong to the selected venue.'
+            })
+
+        if venue_area and scheduled_start and scheduled_end and schedule_status not in {'postponed', 'cancelled'}:
             conflicts = EventSchedule.objects.filter(
                 venue_area=venue_area,
                 scheduled_start__lt=scheduled_end,
                 scheduled_end__gt=scheduled_start,
             ).exclude(
-                event__status__in=['postponed', 'cancelled'],
+                status__in=['postponed', 'cancelled'],
             )
             if self.instance:
                 conflicts = conflicts.exclude(pk=self.instance.pk)
@@ -334,6 +343,16 @@ class EventScheduleSerializer(serializers.ModelSerializer):
                 })
 
         return attrs
+
+    def create(self, validated_data):
+        if validated_data.get('venue_area') and not validated_data.get('venue'):
+            validated_data['venue'] = validated_data['venue_area'].venue
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if validated_data.get('venue_area') and not validated_data.get('venue'):
+            validated_data['venue'] = validated_data['venue_area'].venue
+        return super().update(instance, validated_data)
 
     def get_participants(self, obj):
         visible_statuses = {'submitted', 'pending', 'approved'}
@@ -348,6 +367,9 @@ class EventScheduleSerializer(serializers.ModelSerializer):
             for registration in obj.registrations.all()
             if registration.status in visible_statuses
         ]
+
+    def get_has_result_data(self, obj):
+        return hasattr(obj, 'match_result') or obj.podium_results.exists()
 
 
 # ---------------------------------------------------------------------------
