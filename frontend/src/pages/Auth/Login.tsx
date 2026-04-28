@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import type { DecodedUser } from '../../context/AuthContext';
-import { setTokens } from '../../services/auth';
-import { API_URL } from '../../services/api';
-import axios from 'axios';
+import { loginRequest } from '../../services/api';
 import type { AxiosError } from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import { LogIn } from 'lucide-react';
@@ -45,18 +43,16 @@ export default function Login() {
         setLoading(true);
 
         try {
-            const res = await axios.post(`${API_URL}/auth/login/`, {
+            const access = await loginRequest({
                 username,
                 password,
             });
-            const { access, refresh } = res.data;
             const decoded = jwtDecode<DecodedUser>(access);
             const roleHome = ROLE_HOME_PATH[decoded.role] || '/';
             const redirectPath = requestedPath && canVisitRequestedPath(requestedPath, decoded.role)
                 ? requestedPath
                 : roleHome;
 
-            setTokens(access, refresh);
             loginState(access);
             navigate(redirectPath, { replace: true });
         } catch (err: unknown) {
