@@ -17,20 +17,31 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load .env file from BASE_DIR
+# Load backend/.env first, then allow repo-root .env as a fallback for local dev.
 load_dotenv(BASE_DIR / '.env')
+load_dotenv(BASE_DIR.parent / '.env')
+
+
+def env_value(name, default=''):
+    return os.getenv(name, default).strip()
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-key-for-dev-only')
+SECRET_KEY = env_value('SECRET_KEY', 'django-insecure-default-key-for-dev-only')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'True') == 'True'
+DEBUG = env_value('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in env_value('ALLOWED_HOSTS').split(',')
+    if host.strip()
+]
+if DEBUG and not ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']
 
 
 # Application definition
@@ -134,7 +145,12 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in env_value('CORS_ALLOWED_ORIGINS').split(',')
+    if origin.strip()
+]
+CORS_ALLOW_ALL_ORIGINS = DEBUG and not CORS_ALLOWED_ORIGINS
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -144,3 +160,14 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ),
 }
+
+TURNSTILE_SECRET_KEY = env_value('TURNSTILE_SECRET_KEY')
+BREVO_API_KEY = env_value('BREVO_API_KEY')
+BREVO_SENDER_EMAIL = env_value('BREVO_SENDER_EMAIL')
+BREVO_SENDER_NAME = env_value('BREVO_SENDER_NAME', 'Enverga Arena')
+TRYOUT_ALLOWED_EMAIL_DOMAIN = env_value('TRYOUT_ALLOWED_EMAIL_DOMAIN', '@student.mseuf.edu.ph')
+TRYOUT_OTP_EXPIRY_MINUTES = int(env_value('TRYOUT_OTP_EXPIRY_MINUTES', '10'))
+TRYOUT_VERIFIED_APPLICATION_WINDOW_MINUTES = int(env_value('TRYOUT_VERIFIED_APPLICATION_WINDOW_MINUTES', '30'))
+TRYOUT_MAX_VERIFY_ATTEMPTS = int(env_value('TRYOUT_MAX_VERIFY_ATTEMPTS', '5'))
+TRYOUT_MAX_OTP_REQUESTS_PER_HOUR = int(env_value('TRYOUT_MAX_OTP_REQUESTS_PER_HOUR', '3'))
+TRYOUT_MAX_APPLICATIONS_PER_HOUR = int(env_value('TRYOUT_MAX_APPLICATIONS_PER_HOUR', '5'))
