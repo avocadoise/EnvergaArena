@@ -27,6 +27,7 @@ import {
     useCreateRegistration,
     useDepartments,
     useEvents,
+    useAdminNews,
     useRegistrations,
     useRooneyLogs,
     useTryoutApplications,
@@ -78,6 +79,7 @@ function AdminView() {
     const { data: matches } = useMatchResults();
     const { data: podiums } = usePodiumResults();
     const { data: rooneyLogs } = useRooneyLogs();
+    const { data: newsArticles } = useAdminNews();
     const updateStatus = useUpdateRegistrationStatus();
 
     if (isLoading) return <div className="loading loading-spinner text-maroon" />;
@@ -95,7 +97,7 @@ function AdminView() {
         { label: 'Ongoing Events', value: events?.filter(event => event.status === 'live').length || 0, icon: Clock },
         { label: 'Pending Registrations', value: pending.length, icon: ClipboardList },
         { label: 'Awaiting Finalization', value: awaitingFinalization, icon: Medal },
-        { label: 'Published News', value: 0, icon: Newspaper },
+        { label: 'Published News', value: newsArticles?.filter(article => article.status === 'published').length || 0, icon: Newspaper },
     ];
 
     return (
@@ -135,7 +137,7 @@ function AdminView() {
                                 <div className="flex flex-col gap-4">
                                     <div className="flex justify-between gap-4">
                                         <div>
-                                            <div className="badge badge-warning mb-2 capitalize">{reg.status.replace('_', ' ')}</div>
+                                            <div className="badge badge-warning mb-2 h-auto min-h-6 whitespace-nowrap px-3 py-1 text-xs capitalize leading-tight">{labelize(reg.status)}</div>
                                             <h3 className="font-bold text-lg text-charcoal">
                                                 {reg.department_name}
                                             </h3>
@@ -177,7 +179,7 @@ function AdminView() {
                                         </div>
                                         <div className="flex flex-wrap gap-2">
                                             {reg.roster?.length ? reg.roster.map(entry => (
-                                                <span key={entry.id || entry.athlete} className="badge badge-outline">
+                                                <span key={entry.id || entry.athlete} className="badge h-auto min-h-6 whitespace-nowrap px-3 py-1 text-xs badge-outline">
                                                     {entry.athlete_name || entry.student_number || `Athlete #${entry.athlete}`}
                                                 </span>
                                             )) : (
@@ -373,8 +375,8 @@ function DeptRepView() {
                                                 </div>
                                             </td>
                                             <td>
-                                                <span className={`badge capitalize ${statusBadgeClass(reg.status)}`}>
-                                                    {reg.status.replace('_', ' ')}
+                                                <span className={`badge h-auto min-h-6 whitespace-nowrap px-3 py-1 text-xs capitalize leading-tight ${statusBadgeClass(reg.status)}`}>
+                                                    {labelize(reg.status)}
                                                 </span>
                                             </td>
                                             <td>{reg.roster?.length || 0} enrolled</td>
@@ -590,6 +592,10 @@ function statusBadgeClass(status: EventRegistration['status']) {
     if (status === 'approved') return 'badge-success text-white';
     if (status === 'rejected' || status === 'needs_revision') return 'badge-error text-white';
     return 'badge-warning';
+}
+
+function labelize(value: string) {
+    return value.replaceAll('_', ' ');
 }
 
 function formatScheduleDate(value?: string | null) {
