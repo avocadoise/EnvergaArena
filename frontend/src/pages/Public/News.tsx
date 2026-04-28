@@ -4,6 +4,7 @@ import { format, parseISO } from 'date-fns';
 import { ArrowRight, CalendarDays, Newspaper, Search, Sparkles } from 'lucide-react';
 import { usePublishedNews } from '../../hooks/usePublicData';
 import type { PublicNewsArticle } from '../../hooks/usePublicData';
+import DepartmentLogo from '../../components/DepartmentLogo';
 
 type NewsFilter = 'all' | PublicNewsArticle['article_type'];
 
@@ -189,7 +190,12 @@ function MetaLine({
                 {formatDate(article.published_at)}
             </span>
             {article.event_name && <span>{article.event_name}</span>}
-            {article.department_name && <span>{compact ? article.department_name : `Department: ${article.department_name}`}</span>}
+            {article.department_name && (
+                <span className="inline-flex items-center gap-2">
+                    <DepartmentLogo name={article.department_name} className="h-6 w-6 border-0 shadow-none" />
+                    {compact ? article.department_name : `Department: ${article.department_name}`}
+                </span>
+            )}
         </div>
     );
 }
