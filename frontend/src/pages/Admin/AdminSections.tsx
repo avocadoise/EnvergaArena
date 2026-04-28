@@ -19,6 +19,7 @@ import {
     useAthletes,
     useApproveAIRecap,
     useCreateAdminNews,
+    useCreateEvent,
     useCreateSchedule,
     useCreateVenue,
     useDepartments,
@@ -31,11 +32,12 @@ import {
     useRooneyLogs,
     useUpdateAIRecap,
     useUpdateAdminNews,
+    useUpdateEvent,
     useUpdateRegistrationStatus,
     useUpdateSchedule,
     useVenues,
 } from '../../hooks/useAdminData';
-import type { AIRecap, EventRegistration, NewsArticle, SchedulePayload } from '../../hooks/useAdminData';
+import type { AIRecap, EventItem, EventPayload, EventRegistration, NewsArticle, SchedulePayload } from '../../hooks/useAdminData';
 import { useMatchResults, useMedalTally, usePodiumResults, useSchedules } from '../../hooks/usePublicData';
 import type { EventSchedule } from '../../hooks/usePublicData';
 import DepartmentLogo from '../../components/DepartmentLogo';
@@ -53,6 +55,24 @@ interface ScheduleFormState {
     venue_area: string;
     status: ScheduleStatus;
     notes: string;
+}
+
+interface EventFormState {
+    id?: number;
+    name: string;
+    slug: string;
+    category: string;
+    division: string;
+    result_family: 'match_based' | 'rank_based';
+    competition_format: string;
+    best_of: string;
+    team_size_min: string;
+    team_size_max: string;
+    roster_size_max: string;
+    medal_bearing: boolean;
+    ruleset_ref: string;
+    status: EventItem['status'];
+    sort_order: string;
 }
 
 export function DepartmentsPage() {
@@ -345,11 +365,75 @@ export function CategoriesPage() {
 
 export function EventsPage() {
     const { data: events, isLoading } = useEvents();
+    const { data: categories } = useEventCategories();
+    const createEvent = useCreateEvent();
+    const updateEvent = useUpdateEvent();
     const [status, setStatus] = useState('all');
-    const rows = (events || []).filter(event => status === 'all' || event.status === status);
+    const [category, setCategory] = useState('all');
+    const [resultMode, setResultMode] = useState('all');
+    const [medalBearing, setMedalBearing] = useState('all');
+    const [division, setDivision] = useState('all');
+    const [query, setQuery] = useState('');
+    const [selected, setSelected] = useState<EventItem | null>(null);
+    const [editor, setEditor] = useState<EventFormState | null>(null);
+    const activeEvent = editor?.id ? events?.find(event => event.id === editor.id) || null : null;
+    const mutationError = createEvent.error || updateEvent.error;
+    const apiError = getApiErrorMessage(mutationError);
+    const divisions = Array.from(new Set((events || []).map(event => event.division || 'Open'))).sort();
+    const rows = (events || []).filter(event => {
+        const matchesStatus = status === 'all' || event.status === status;
+        const matchesCategory = category === 'all' || String(event.category) === category;
+        const matchesResultMode = resultMode === 'all' || event.result_family === resultMode;
+        const matchesMedal = medalBearing === 'all' || String(event.medal_bearing) === medalBearing;
+        const matchesDivision = division === 'all' || (event.division || 'Open') === division;
+        const matchesQuery = `${event.name} ${event.slug} ${event.category_name} ${event.division} ${event.competition_format}`.toLowerCase().includes(query.toLowerCase());
+        return matchesStatus && matchesCategory && matchesResultMode && matchesMedal && matchesDivision && matchesQuery;
+    });
+
+    const openCreate = () => {
+        setSelected(null);
+        setEditor(createEmptyEventForm(categories?.[0]?.id));
+    };
+
+    const openEdit = (event: EventItem) => {
+        setSelected(event);
+        setEditor(eventToForm(event));
+    };
+
+    const saveEvent = (event: FormEvent) => {
+        event.preventDefault();
+        if (!editor) return;
+
+        if (activeEvent && isSensitiveEventEdit(activeEvent, editor)) {
+            const confirmed = window.confirm('This event has linked schedules, registrations, or results. Continue with this metadata/status update?');
+            if (!confirmed) return;
+        }
+
+        const payload = formToEventPayload(editor);
+        if (editor.id) {
+            updateEvent.mutate(
+                { id: editor.id, ...payload },
+                { onSuccess: saved => { setSelected(saved); setEditor(null); } },
+            );
+            return;
+        }
+
+        createEvent.mutate(payload as EventPayload, {
+            onSuccess: saved => { setSelected(saved); setEditor(null); },
+        });
+    };
+
+    const patchStatus = (event: EventItem, nextStatus: EventItem['status']) => {
+        if (event.linked_schedule_count || event.linked_registration_count || event.linked_result_count) {
+            const confirmed = window.confirm('This event has linked operational data. Continue with the status change?');
+            if (!confirmed) return;
+        }
+        updateEvent.mutate({ id: event.id, status: nextStatus });
+    };
 
     return (
-        <SectionShell title="Events">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <SectionShell title="Events" searchValue={query} onSearch={setQuery}>
             <FilterRow>
                 <select className="select select-bordered select-sm" value={status} onChange={event => setStatus(event.target.value)}>
                     <option value="all">All statuses</option>
@@ -358,7 +442,30 @@ export function EventsPage() {
                     <option value="completed">Completed</option>
                     <option value="postponed">Postponed</option>
                     <option value="cancelled">Cancelled</option>
+                    <option value="archived">Archived</option>
                 </select>
+                <select className="select select-bordered select-sm" value={category} onChange={event => setCategory(event.target.value)}>
+                    <option value="all">All categories</option>
+                    {(categories || []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+                <select className="select select-bordered select-sm" value={resultMode} onChange={event => setResultMode(event.target.value)}>
+                    <option value="all">All result modes</option>
+                    <option value="match_based">Match Based</option>
+                    <option value="rank_based">Rank Based</option>
+                </select>
+                <select className="select select-bordered select-sm" value={medalBearing} onChange={event => setMedalBearing(event.target.value)}>
+                    <option value="all">All medal settings</option>
+                    <option value="true">Medal-bearing</option>
+                    <option value="false">Non-medal</option>
+                </select>
+                <select className="select select-bordered select-sm" value={division} onChange={event => setDivision(event.target.value)}>
+                    <option value="all">All divisions</option>
+                    {divisions.map(item => <option key={item} value={item}>{item}</option>)}
+                </select>
+                <button className="btn btn-sm bg-maroon text-white hover:bg-maroon-dark" onClick={openCreate}>
+                    <Plus className="h-4 w-4" />
+                    Add Event
+                </button>
             </FilterRow>
             <TableState isLoading={isLoading} isEmpty={rows.length === 0}>
                 <table className="table">
@@ -370,23 +477,189 @@ export function EventsPage() {
                             <th>Result Mode</th>
                             <th>Medal Bearing</th>
                             <th>Status</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {rows.map(event => (
-                            <tr key={event.id}>
-                                <td className="font-semibold">{event.name}</td>
+                            <tr key={event.id} className="hover">
+                                <td>
+                                    <div className="font-semibold">{event.name}</div>
+                                    <div className="text-xs text-gray-600">{event.slug}</div>
+                                </td>
                                 <td>{event.category_name}</td>
-                                <td>{event.name.includes("Men") ? "Men's" : event.name.includes("Women") ? "Women's" : 'Open'}</td>
+                                <td>{event.division || 'Open'}</td>
                                 <td><StatusChip status={event.result_family} /></td>
-                                <td>{event.is_program_event ? 'No' : 'Yes'}</td>
+                                <td>{event.medal_bearing ? 'Yes' : 'No'}</td>
                                 <td><StatusChip status={event.status} /></td>
+                                <td>
+                                    <div className="flex flex-wrap gap-2">
+                                        <button className="btn btn-xs" onClick={() => setSelected(event)}>
+                                            <Eye className="h-3.5 w-3.5" />
+                                            View
+                                        </button>
+                                        <button className="btn btn-xs border-maroon text-maroon hover:bg-maroon hover:text-white" onClick={() => openEdit(event)}>
+                                            Edit
+                                        </button>
+                                        {event.status !== 'archived' && (
+                                            <button className="btn btn-xs btn-warning" onClick={() => patchStatus(event, 'archived')}>
+                                                Archive
+                                            </button>
+                                        )}
+                                    </div>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </TableState>
         </SectionShell>
+        <aside className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
+            {selected ? (
+                <div className="space-y-4">
+                    <div>
+                        <h3 className="text-xl font-black text-charcoal">{selected.name}</h3>
+                        <p className="text-sm text-gray-600">{selected.category_name} - {selected.division || 'Open'}</p>
+                    </div>
+                    {(selected.linked_schedule_count > 0 || selected.linked_registration_count > 0 || selected.linked_result_count > 0) && (
+                        <div className="alert alert-warning py-3 text-sm">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>This event has linked operational data. Sensitive changes require care.</span>
+                        </div>
+                    )}
+                    <div className="space-y-2 text-sm">
+                        <InfoRow label="Slug" value={selected.slug || 'Not set'} />
+                        <InfoRow label="Result mode" value={labelize(selected.result_family)} />
+                        <InfoRow label="Medal bearing" value={selected.medal_bearing ? 'Yes' : 'No'} />
+                        <InfoRow label="Status" value={labelize(selected.status)} />
+                        <InfoRow label="Competition format" value={selected.competition_format || 'Not set'} />
+                        <InfoRow label="Best of" value={selected.best_of ? String(selected.best_of) : 'Not set'} />
+                        <InfoRow label="Team size" value={`${selected.team_size_min ?? 'TBA'} - ${selected.team_size_max ?? 'TBA'}`} />
+                        <InfoRow label="Roster max" value={selected.roster_size_max ? String(selected.roster_size_max) : 'Not set'} />
+                        <InfoRow label="Schedules" value={String(selected.linked_schedule_count)} />
+                        <InfoRow label="Registrations" value={String(selected.linked_registration_count)} />
+                        <InfoRow label="Results" value={String(selected.linked_result_count)} />
+                    </div>
+                    {selected.ruleset_ref && (
+                        <div className="rounded-md bg-base-200 p-3">
+                            <div className="text-xs font-bold uppercase text-gray-500">Ruleset reference</div>
+                            <p className="mt-1 text-sm text-charcoal">{selected.ruleset_ref}</p>
+                        </div>
+                    )}
+                    <button className="btn w-full bg-maroon text-white hover:bg-maroon-dark" onClick={() => openEdit(selected)}>
+                        Edit Event
+                    </button>
+                </div>
+            ) : (
+                <EmptyPanel title="No event selected" text="View or edit a row to inspect operational metadata and linked records." />
+            )}
+        </aside>
+        {editor && (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4">
+                <form className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-lg bg-base-100 p-6 shadow-2xl" onSubmit={saveEvent}>
+                    <div className="mb-5 flex items-start justify-between gap-4">
+                        <div>
+                            <h3 className="text-2xl font-black text-charcoal">{editor.id ? 'Edit Event' : 'Add Event'}</h3>
+                            <p className="text-sm text-gray-600">Manage event definitions, result mode, roster limits, and operational status.</p>
+                        </div>
+                        <button type="button" className="btn btn-sm btn-ghost" onClick={() => setEditor(null)}>Close</button>
+                    </div>
+                    {activeEvent && isSensitiveEventEdit(activeEvent, editor) && (
+                        <div className="alert alert-warning mb-4 text-sm">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>This event has linked schedules, registrations, or results. Result mode and medal-bearing changes may be blocked by the backend.</span>
+                        </div>
+                    )}
+                    {apiError && (
+                        <div className="alert alert-warning mb-4 text-sm">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>{apiError}</span>
+                        </div>
+                    )}
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Title</span>
+                            <input className="input input-bordered" value={editor.name} onChange={event => setEditor({ ...editor, name: event.target.value, slug: editor.slug || slugify(event.target.value) })} required />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Slug</span>
+                            <input className="input input-bordered" value={editor.slug} onChange={event => setEditor({ ...editor, slug: slugify(event.target.value) })} placeholder="auto-generated-if-empty" />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Category</span>
+                            <select className="select select-bordered" value={editor.category} onChange={event => setEditor({ ...editor, category: event.target.value })} required>
+                                <option value="">Select category</option>
+                                {(categories || []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+                            </select>
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Division</span>
+                            <input className="input input-bordered" value={editor.division} onChange={event => setEditor({ ...editor, division: event.target.value })} placeholder="Open, Men's, Women's, Mixed" />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Result mode</span>
+                            <select className="select select-bordered" value={editor.result_family} onChange={event => setEditor({ ...editor, result_family: event.target.value as EventFormState['result_family'] })}>
+                                <option value="match_based">Match Based</option>
+                                <option value="rank_based">Rank Based</option>
+                            </select>
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Competition format</span>
+                            <input className="input input-bordered" value={editor.competition_format} onChange={event => setEditor({ ...editor, competition_format: event.target.value })} placeholder="Single elimination, timed final, bracket" />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Best of</span>
+                            <input type="number" min="1" className="input input-bordered" value={editor.best_of} onChange={event => setEditor({ ...editor, best_of: event.target.value })} />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Status</span>
+                            <select className="select select-bordered" value={editor.status} onChange={event => setEditor({ ...editor, status: event.target.value as EventItem['status'] })}>
+                                <option value="scheduled">Scheduled</option>
+                                <option value="live">Live</option>
+                                <option value="completed">Completed</option>
+                                <option value="postponed">Postponed</option>
+                                <option value="cancelled">Cancelled</option>
+                                <option value="archived">Archived</option>
+                            </select>
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Team size min</span>
+                            <input type="number" min="0" className="input input-bordered" value={editor.team_size_min} onChange={event => setEditor({ ...editor, team_size_min: event.target.value })} />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Team size max</span>
+                            <input type="number" min="0" className="input input-bordered" value={editor.team_size_max} onChange={event => setEditor({ ...editor, team_size_max: event.target.value })} />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Roster size max</span>
+                            <input type="number" min="0" className="input input-bordered" value={editor.roster_size_max} onChange={event => setEditor({ ...editor, roster_size_max: event.target.value })} />
+                        </label>
+                        <label className="form-control">
+                            <span className="label-text font-semibold">Sort order</span>
+                            <input type="number" min="0" className="input input-bordered" value={editor.sort_order} onChange={event => setEditor({ ...editor, sort_order: event.target.value })} />
+                        </label>
+                        <label className="flex items-center gap-3 rounded-lg border border-base-300 p-3">
+                            <input type="checkbox" className="toggle bg-maroon" checked={editor.medal_bearing} onChange={event => setEditor({ ...editor, medal_bearing: event.target.checked })} />
+                            <span>
+                                <span className="block font-semibold text-charcoal">Medal-bearing event</span>
+                                <span className="text-xs text-gray-600">Counts toward medal tally when final results are entered.</span>
+                            </span>
+                        </label>
+                        <label className="form-control md:col-span-2">
+                            <span className="label-text font-semibold">Ruleset reference</span>
+                            <input className="input input-bordered" value={editor.ruleset_ref} onChange={event => setEditor({ ...editor, ruleset_ref: event.target.value })} placeholder="Rules memo, handbook section, or format note" />
+                        </label>
+                    </div>
+                    <div className="mt-6 flex flex-wrap justify-end gap-2">
+                        <button type="button" className="btn" onClick={() => setEditor(null)}>Cancel</button>
+                        <button type="submit" className="btn bg-maroon text-white hover:bg-maroon-dark" disabled={createEvent.isPending || updateEvent.isPending}>
+                            {createEvent.isPending || updateEvent.isPending ? 'Saving...' : 'Save Event'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        )}
+        </div>
     );
 }
 
@@ -1689,6 +1962,86 @@ function fromDateTimeLocal(value: string) {
 
 function getScheduleStatus(schedule: EventSchedule): ScheduleStatus {
     return (schedule.status || schedule.event_status) as ScheduleStatus;
+}
+
+function createEmptyEventForm(categoryId?: number): EventFormState {
+    return {
+        name: '',
+        slug: '',
+        category: categoryId ? String(categoryId) : '',
+        division: 'Open',
+        result_family: 'match_based',
+        competition_format: '',
+        best_of: '',
+        team_size_min: '',
+        team_size_max: '',
+        roster_size_max: '',
+        medal_bearing: true,
+        ruleset_ref: '',
+        status: 'scheduled',
+        sort_order: '0',
+    };
+}
+
+function eventToForm(event: EventItem): EventFormState {
+    return {
+        id: event.id,
+        name: event.name,
+        slug: event.slug || '',
+        category: String(event.category),
+        division: event.division || 'Open',
+        result_family: event.result_family,
+        competition_format: event.competition_format || '',
+        best_of: numberToFormValue(event.best_of),
+        team_size_min: numberToFormValue(event.team_size_min),
+        team_size_max: numberToFormValue(event.team_size_max),
+        roster_size_max: numberToFormValue(event.roster_size_max),
+        medal_bearing: event.medal_bearing,
+        ruleset_ref: event.ruleset_ref || '',
+        status: event.status,
+        sort_order: numberToFormValue(event.sort_order),
+    };
+}
+
+function formToEventPayload(form: EventFormState): EventPayload {
+    return {
+        name: form.name.trim(),
+        slug: form.slug.trim(),
+        category: Number(form.category),
+        division: form.division.trim() || 'Open',
+        result_family: form.result_family,
+        competition_format: form.competition_format.trim(),
+        best_of: nullableNumber(form.best_of),
+        team_size_min: nullableNumber(form.team_size_min),
+        team_size_max: nullableNumber(form.team_size_max),
+        roster_size_max: nullableNumber(form.roster_size_max),
+        medal_bearing: form.medal_bearing,
+        is_program_event: !form.medal_bearing,
+        ruleset_ref: form.ruleset_ref.trim(),
+        status: form.status,
+        sort_order: nullableNumber(form.sort_order) || 0,
+    };
+}
+
+function isSensitiveEventEdit(event: EventItem, form: EventFormState) {
+    const hasLinkedData = Boolean(event.linked_schedule_count || event.linked_registration_count || event.linked_result_count);
+    if (!hasLinkedData) return false;
+    return (
+        event.result_family !== form.result_family
+        || event.division !== form.division
+        || event.medal_bearing !== form.medal_bearing
+        || event.status !== form.status
+    );
+}
+
+function nullableNumber(value: string) {
+    if (value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function numberToFormValue(value: number | null | undefined) {
+    return value === null || value === undefined ? '' : String(value);
 }
 
 function createEmptyScheduleForm(): ScheduleFormState {

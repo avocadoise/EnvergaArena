@@ -41,11 +41,24 @@ export interface EventCategory {
 export interface EventItem {
     id: number;
     name: string;
+    slug: string;
     category: number;
     category_name: string;
+    division: string;
     result_family: 'match_based' | 'rank_based';
+    competition_format: string;
+    best_of: number | null;
+    team_size_min: number | null;
+    team_size_max: number | null;
+    roster_size_max: number | null;
+    medal_bearing: boolean;
+    ruleset_ref: string;
+    sort_order: number;
     is_program_event: boolean;
-    status: 'scheduled' | 'live' | 'completed' | 'postponed' | 'cancelled';
+    status: 'scheduled' | 'live' | 'completed' | 'postponed' | 'cancelled' | 'archived';
+    linked_schedule_count: number;
+    linked_registration_count: number;
+    linked_result_count: number;
 }
 
 export interface Athlete {
@@ -194,6 +207,24 @@ export interface SchedulePayload {
     notes?: string;
 }
 
+export interface EventPayload {
+    name: string;
+    slug?: string;
+    category: number;
+    division?: string;
+    result_family: 'match_based' | 'rank_based';
+    competition_format?: string;
+    best_of?: number | null;
+    team_size_min?: number | null;
+    team_size_max?: number | null;
+    roster_size_max?: number | null;
+    medal_bearing?: boolean;
+    ruleset_ref?: string;
+    sort_order?: number;
+    is_program_event?: boolean;
+    status?: EventItem['status'];
+}
+
 // Hooks
 export const useDepartments = () => {
     return useQuery<Department[]>({
@@ -244,6 +275,33 @@ export const useEvents = () => {
         queryFn: async () => {
             const { data } = await api.get('/public/events/');
             return data;
+        },
+    });
+};
+
+export const useCreateEvent = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (payload: EventPayload) => {
+            const { data } = await api.post('/public/events/', payload);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['events'] });
+        },
+    });
+};
+
+export const useUpdateEvent = () => {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ id, ...payload }: Partial<EventPayload> & { id: number }) => {
+            const { data } = await api.patch(`/public/events/${id}/`, payload);
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['events'] });
+            queryClient.invalidateQueries({ queryKey: ['schedules'] });
         },
     });
 };
