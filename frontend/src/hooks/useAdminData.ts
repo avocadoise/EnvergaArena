@@ -7,6 +7,9 @@ export interface Department {
     name: string;
     acronym: string;
     color_code?: string;
+    representative_name?: string;
+    representative_username?: string;
+    operational_status?: 'ready' | 'needs_representative';
 }
 
 export interface VenueArea {
