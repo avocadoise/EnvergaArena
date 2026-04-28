@@ -1,10 +1,13 @@
 from rest_framework import serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from .models import (
-    EventSchedule, Athlete, EventRegistration, RosterEntry,
+    EventSchedule, Athlete, EmailVerificationCode, TryoutApplication, EventRegistration, RosterEntry,
     MatchResult, MatchSetScore,
     PodiumResult, MedalRecord, MedalTally,
 )
 from core.models import Department
+from .tryout_services import get_recent_verified_code, validate_school_email
 
 
 # ---------------------------------------------------------------------------
@@ -15,6 +18,174 @@ class AthleteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Athlete
         fields = '__all__'
+
+
+class TryoutApplicationSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source='department.name', read_only=True)
+    department_acronym = serializers.CharField(source='department.acronym', read_only=True)
+    schedule_event_name = serializers.CharField(source='schedule.event.name', read_only=True)
+    schedule_category = serializers.CharField(source='schedule.event.category.name', read_only=True)
+    schedule_start = serializers.DateTimeField(source='schedule.scheduled_start', read_only=True)
+    venue_name = serializers.CharField(source='schedule.venue.name', read_only=True, allow_null=True)
+    converted_athlete_name = serializers.CharField(source='converted_athlete.full_name', read_only=True, allow_null=True)
+
+    class Meta:
+        model = TryoutApplication
+        fields = [
+            'id', 'department', 'department_name', 'department_acronym',
+            'schedule', 'schedule_event_name', 'schedule_category', 'schedule_start', 'venue_name',
+            'student_number', 'full_name', 'school_email', 'contact_number',
+            'program_course', 'year_level', 'prior_experience', 'notes',
+            'email_verified', 'verified_at', 'status', 'review_notes',
+            'reviewed_by', 'reviewed_at', 'converted_athlete', 'converted_athlete_name',
+            'created_ip', 'user_agent', 'submitted_at', 'created_at', 'updated_at',
+        ]
+        read_only_fields = [
+            'email_verified', 'verified_at', 'reviewed_by', 'reviewed_at',
+            'converted_athlete', 'created_ip', 'user_agent', 'submitted_at', 'created_at', 'updated_at',
+        ]
+
+    def validate(self, attrs):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None)
+
+        if user and user.is_authenticated and not (user.is_staff or user.is_superuser):
+            profile = getattr(user, 'profile', None)
+            profile_department = getattr(profile, 'department', None)
+            if not profile_department:
+                raise serializers.ValidationError({
+                    'department': 'Your account is not linked to a department.'
+                })
+            attrs['department'] = profile_department
+
+        department = attrs.get('department') or getattr(self.instance, 'department', None)
+        schedule = attrs.get('schedule') or getattr(self.instance, 'schedule', None)
+
+        if not department:
+            raise serializers.ValidationError({'department': 'Department is required.'})
+        if not schedule:
+            raise serializers.ValidationError({'schedule': 'Tryout event schedule is required.'})
+        if schedule.event.is_program_event:
+            raise serializers.ValidationError({'schedule': 'Program events do not accept tryout applications.'})
+
+        return attrs
+
+
+class TryoutSendOtpSerializer(serializers.Serializer):
+    full_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    student_no = serializers.CharField(max_length=50)
+    school_email = serializers.EmailField()
+    department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.all())
+    schedule = serializers.PrimaryKeyRelatedField(queryset=EventSchedule.objects.select_related('event').all())
+    turnstile_token = serializers.CharField()
+
+    def validate_school_email(self, value):
+        try:
+            return validate_school_email(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message)
+
+    def validate(self, attrs):
+        if attrs['schedule'].event.is_program_event:
+            raise serializers.ValidationError({'schedule': 'Program events do not accept tryout applications.'})
+        duplicate = TryoutApplication.objects.filter(
+            student_number=attrs['student_no'].strip(),
+            department=attrs['department'],
+            schedule=attrs['schedule'],
+        ).exclude(status='withdrawn').exists()
+        if duplicate:
+            raise serializers.ValidationError({
+                'student_no': 'An active tryout application already exists for this student, department, and event.'
+            })
+        return attrs
+
+
+class TryoutVerifyOtpSerializer(serializers.Serializer):
+    student_no = serializers.CharField(max_length=50)
+    school_email = serializers.EmailField()
+    department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.all())
+    schedule = serializers.PrimaryKeyRelatedField(queryset=EventSchedule.objects.select_related('event').all())
+    code = serializers.CharField(min_length=6, max_length=6)
+
+    def validate_school_email(self, value):
+        try:
+            return validate_school_email(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message)
+
+
+class TryoutApplySerializer(serializers.Serializer):
+    full_name = serializers.CharField(max_length=255)
+    student_no = serializers.CharField(max_length=50)
+    school_email = serializers.EmailField()
+    department = serializers.PrimaryKeyRelatedField(queryset=Department.objects.all())
+    schedule = serializers.PrimaryKeyRelatedField(queryset=EventSchedule.objects.select_related('event').all())
+    program = serializers.CharField(max_length=100)
+    year_level = serializers.CharField(max_length=20)
+    contact_no = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    prior_experience = serializers.CharField(required=False, allow_blank=True)
+    notes = serializers.CharField(required=False, allow_blank=True)
+    consent = serializers.BooleanField()
+
+    def validate_school_email(self, value):
+        try:
+            return validate_school_email(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message)
+
+    def validate(self, attrs):
+        if not attrs.get('consent'):
+            raise serializers.ValidationError({'consent': 'Consent is required to submit a tryout application.'})
+        if attrs['schedule'].event.is_program_event:
+            raise serializers.ValidationError({'schedule': 'Program events do not accept tryout applications.'})
+
+        student_number = attrs['student_no'].strip()
+        email = attrs['school_email'].strip().lower()
+        department = attrs['department']
+        schedule = attrs['schedule']
+
+        verified_code = get_recent_verified_code(email, student_number, department, schedule)
+        if not verified_code:
+            raise serializers.ValidationError({
+                'school_email': 'Verify your school email with OTP before submitting.'
+            })
+
+        duplicate = TryoutApplication.objects.filter(
+            student_number=student_number,
+            department=department,
+            schedule=schedule,
+        ).exclude(status='withdrawn').exists()
+        if duplicate:
+            raise serializers.ValidationError({
+                'student_no': 'An active tryout application already exists for this student, department, and event.'
+            })
+
+        attrs['verified_code'] = verified_code
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context.get('request')
+        verified_code: EmailVerificationCode = validated_data.pop('verified_code')
+        student_number = validated_data.pop('student_no').strip()
+        contact_number = validated_data.pop('contact_no', '')
+        program_course = validated_data.pop('program').strip()
+        email = validated_data.pop('school_email').strip().lower()
+        validated_data.pop('consent', None)
+
+        return TryoutApplication.objects.create(
+            student_number=student_number,
+            school_email=email,
+            contact_number=contact_number,
+            program_course=program_course,
+            email_verified=True,
+            verified_at=verified_code.used_at,
+            status='submitted',
+            created_ip=getattr(request, 'tryout_client_ip', None),
+            user_agent=getattr(request, 'tryout_user_agent', ''),
+            submitted_at=timezone.now(),
+            **validated_data,
+        )
+
 
 class RosterEntrySerializer(serializers.ModelSerializer):
     athlete_name = serializers.CharField(source='athlete.full_name', read_only=True)
@@ -245,7 +416,7 @@ class PodiumResultSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'schedule', 'event_name',
             'department', 'department_name', 'department_acronym',
-            'rank', 'medal', 'points_awarded', 'is_final',
+            'rank', 'medal', 'is_final',
             'recorded_at', 'updated_at',
         ]
         read_only_fields = ['recorded_at', 'updated_at']
@@ -278,7 +449,7 @@ class MedalTallySerializer(serializers.ModelSerializer):
         model = MedalTally
         fields = [
             'id', 'department', 'department_name', 'department_acronym', 'department_color',
-            'gold', 'silver', 'bronze', 'total_medals', 'total_points', 'last_updated',
+            'gold', 'silver', 'bronze', 'total_medals', 'last_updated',
         ]
 
     def get_total_medals(self, obj):
