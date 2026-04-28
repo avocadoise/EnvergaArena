@@ -1,6 +1,6 @@
 # 06 - Runtime Flows
 
-This document describes the critical runtime interactions across the React frontend, Django REST API, PostgreSQL database, and external AI/security/email services.
+This document describes the critical runtime interactions across the React frontend, Django REST API, relational database, and external AI/security/email services. The current local configuration uses SQLite; PostgreSQL is the intended production direction.
 
 ## Flow 1: Login and Session Initialization
 
@@ -11,7 +11,7 @@ sequenceDiagram
     participant U as User
     participant FE as React Login
     participant API as Django Auth API
-    participant DB as PostgreSQL
+    participant DB as Database
     participant C as Browser Cookie Jar
 
     U->>FE: Submit username/password
@@ -110,7 +110,7 @@ sequenceDiagram
     participant API as Tryout API
     participant CF as Cloudflare Turnstile
     participant BR as Brevo Email API
-    participant DB as PostgreSQL
+    participant DB as Database
 
     S->>FE: Fill school email, department, event, and applicant details
     FE->>API: POST /api/public/tryouts/send-otp/
@@ -142,7 +142,7 @@ sequenceDiagram
     participant R as Department Representative
     participant FE as Representative Workspace
     participant API as Department-Scoped API
-    participant DB as PostgreSQL
+    participant DB as Database
 
     R->>FE: Open tryout applications
     FE->>API: GET verified applications for representative department
@@ -167,7 +167,7 @@ sequenceDiagram
     participant R as Department Representative
     participant FE as Representative Roster Builder
     participant API as Registration API
-    participant DB as PostgreSQL
+    participant DB as Database
 
     R->>FE: Select event and eligible department athletes
     FE->>API: POST registration/roster payload
@@ -188,7 +188,7 @@ sequenceDiagram
     participant A as Admin
     participant FE as Admin Registration Review
     participant API as Registration API
-    participant DB as PostgreSQL
+    participant DB as Database
 
     A->>FE: Open registration detail drawer
     FE->>API: GET registrations for admin review
@@ -214,7 +214,7 @@ sequenceDiagram
     participant SVC as Tournament Services
     participant REC as AI Recap Service
     participant LLM as Gemini or Template Fallback
-    participant DB as PostgreSQL
+    participant DB as Database
 
     A->>FE: Submit final match result
     FE->>API: POST/PATCH match result with is_final=true
@@ -245,7 +245,7 @@ sequenceDiagram
     participant API as PodiumResult ViewSet
     participant SVC as Tournament Services
     participant REC as AI Recap Service
-    participant DB as PostgreSQL
+    participant DB as Database
 
     A->>FE: Submit final podium placement
     FE->>API: POST/PATCH podium result with is_final=true
@@ -269,7 +269,7 @@ sequenceDiagram
     participant FE as Admin AI Recap Review
     participant API as /api/admin/ai-recaps/
     participant SVC as Recap Publishing Service
-    participant DB as PostgreSQL
+    participant DB as Database
 
     A->>FE: Open AI Recap Review
     FE->>API: GET /api/admin/ai-recaps/
@@ -296,7 +296,7 @@ sequenceDiagram
     participant A as Admin
     participant FE as Admin News Management
     participant API as /api/admin/news/
-    participant DB as PostgreSQL
+    participant DB as Database
     participant PUB as Public News Pages
 
     A->>FE: Create or edit article
@@ -322,7 +322,7 @@ sequenceDiagram
     participant FE as Rooney Page
     participant API as RooneyQueryView
     participant G as Grounding Service
-    participant DB as PostgreSQL
+    participant DB as Database
     participant LLM as Gemini Model Chain
 
     U->>FE: Ask question
@@ -352,7 +352,7 @@ sequenceDiagram
     participant U as Public User
     participant FE as Public React Pages
     participant API as Public API
-    participant DB as PostgreSQL
+    participant DB as Database
 
     U->>FE: Open home, schedules, results, tally, leaderboard, or news
     FE->>API: GET public endpoints
