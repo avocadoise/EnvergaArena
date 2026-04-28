@@ -4,10 +4,12 @@ from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from core.models import Department, UserProfile, Venue, VenueArea
+from core.models import Department, NewsArticle, UserProfile, Venue, VenueArea
 from events.models import Event, EventCategory
+from rooney.models import AIRecap
 from tournaments.models import (
     Athlete,
+    EmailVerificationCode,
     EventRegistration,
     EventSchedule,
     MatchResult,
@@ -16,6 +18,7 @@ from tournaments.models import (
     MedalTally,
     PodiumResult,
     RosterEntry,
+    TryoutApplication,
 )
 from tournaments.services import apply_final_match_result, apply_final_podium_result
 
@@ -42,6 +45,8 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         self.stdout.write("Clearing existing data...")
         User.objects.filter(username__in=DEMO_USERNAMES).delete()
+        AIRecap.objects.all().delete()
+        NewsArticle.objects.all().delete()
         MedalRecord.objects.all().delete()
         MedalTally.objects.all().delete()
         PodiumResult.objects.all().delete()
@@ -49,6 +54,8 @@ class Command(BaseCommand):
         MatchResult.objects.all().delete()
         RosterEntry.objects.all().delete()
         EventRegistration.objects.all().delete()
+        EmailVerificationCode.objects.all().delete()
+        TryoutApplication.objects.all().delete()
         Athlete.objects.all().delete()
         EventSchedule.objects.all().delete()
         Event.objects.all().delete()
@@ -64,9 +71,11 @@ class Command(BaseCommand):
         events = self.seed_events(categories)
         schedules = self.seed_schedules(events, venue_areas)
         athletes = self.seed_athletes(departments)
+        self.seed_tryout_applications(schedules, departments)
         self.seed_registrations(schedules, departments, users, athletes)
         self.seed_results(schedules, departments)
         self.seed_remaining_medal_records(categories, departments)
+        self.seed_news_and_ai_recaps(schedules, departments, users)
 
         self.stdout.write(self.style.SUCCESS("Successfully seeded context-aligned Enverga Arena demo data."))
         rep_logins = ", ".join(f"{acronym.lower()}_rep/{DEMO_PASSWORD}" for acronym in DEPARTMENT_ACRONYMS)
@@ -349,6 +358,59 @@ class Command(BaseCommand):
                 ))
         return athletes
 
+    def seed_tryout_applications(self, schedules, departments):
+        self.stdout.write("Seeding verified public tryout applications...")
+        program_by_dept = {
+            "CAFA": "BS Architecture",
+            "CAS": "BS Psychology",
+            "CBA": "BS Accountancy",
+            "CCMS": "BS Information Technology",
+            "CCJC": "BS Criminology",
+            "CED": "BSEd English",
+            "CENG": "BS Civil Engineering",
+            "CIHTM": "BS Hospitality Management",
+            "CME": "BS Marine Transportation",
+            "CNAHS": "BS Nursing",
+        }
+        applicant_names = {
+            "CAFA": ["Althea Prado", "Nolan Ferrer"],
+            "CAS": ["Ivy Macaraig", "Cedric Villanueva"],
+            "CBA": ["Rochelle Ong", "Martin Chua"],
+            "CCMS": ["Elijah Soriano", "Kyla Evangelista"],
+            "CCJC": ["Joanne Macalalad", "Renz Tolentino"],
+            "CED": ["Mira Angeles", "Paulo Manabat"],
+            "CENG": ["Theo Aguilar", "Sam Reyes"],
+            "CIHTM": ["Hannah Rivera", "Lance Abella"],
+            "CME": ["Mark Angelo Dizon", "Gia Fortes"],
+            "CNAHS": ["Clara Buenaventura", "Ethan Molina"],
+        }
+        schedule_keys = ["badminton", "tennis", "pickleball", "esports", "swimming"]
+        statuses = ["submitted", "under_review", "selected", "waitlisted"]
+        verified_at = timezone.now() - timedelta(hours=8)
+
+        for dept_index, dept_acronym in enumerate(DEPARTMENT_ACRONYMS):
+            for applicant_index, full_name in enumerate(applicant_names[dept_acronym], 1):
+                schedule = schedules[schedule_keys[(dept_index + applicant_index) % len(schedule_keys)]]
+                email_name = full_name.lower().replace(" ", ".")
+                TryoutApplication.objects.create(
+                    department=departments[dept_acronym],
+                    schedule=schedule,
+                    student_number=f"TRY-{dept_acronym}-2026-{applicant_index:03}",
+                    full_name=full_name,
+                    school_email=f"{email_name}.{dept_acronym.lower()}@mseuf.edu.ph",
+                    contact_number=f"09{dept_index + 10:02}{applicant_index}555010",
+                    program_course=program_by_dept[dept_acronym],
+                    year_level=["1st Year", "2nd Year", "3rd Year", "4th Year"][applicant_index % 4],
+                    prior_experience="Submitted varsity or intramurals interest notes through the verified public form.",
+                    notes="Verified school-email application seeded for representative review.",
+                    email_verified=True,
+                    verified_at=verified_at + timedelta(minutes=dept_index + applicant_index),
+                    status=statuses[(dept_index + applicant_index) % len(statuses)],
+                    submitted_at=verified_at + timedelta(minutes=dept_index + applicant_index),
+                    created_ip="127.0.0.1",
+                    user_agent="seed-data",
+                )
+
     def seed_registrations(self, schedules, departments, users, athletes):
         self.stdout.write("Seeding registrations and rosters...")
         demo_registrations = [
@@ -502,6 +564,124 @@ class Command(BaseCommand):
                     "gold": 0,
                     "silver": 0,
                     "bronze": 0,
-                    "total_points": 0,
                 },
             )
+
+    def seed_news_and_ai_recaps(self, schedules, departments, users):
+        self.stdout.write("Seeding official news articles and AI recap drafts...")
+        admin_user = users["admin"]
+        now = timezone.now()
+
+        announcement = NewsArticle.objects.create(
+            title="Intramurals week operations desk reminders",
+            slug="intramurals-week-operations-desk-reminders",
+            summary="Administrators remind departments to review schedules, venue assignments, and returned registrations before the next competition block.",
+            body_md="The operations desk reminds all departments to monitor official schedules, complete registration revisions promptly, and coordinate venue readiness before each event block.",
+            article_type="announcement",
+            source_label="OSCR Sports Desk",
+            status="published",
+            published_at=now - timedelta(hours=6),
+            ai_generated=False,
+            created_by=admin_user,
+            reviewed_by=admin_user,
+        )
+
+        schedule_update = NewsArticle.objects.create(
+            title="Badminton and tennis qualifiers confirmed in the latest schedule release",
+            slug="badminton-tennis-qualifiers-schedule-release",
+            summary="The latest official release confirms the next badminton and tennis qualification blocks together with venue references.",
+            body_md="The official Enverga Arena schedule confirms the next qualification blocks for badminton and tennis, including venue assignments and start windows shown in the live schedule module.",
+            article_type="schedule_update",
+            source_label="Schedule Operations",
+            event=schedules["badminton"].event,
+            status="published",
+            published_at=now - timedelta(hours=4),
+            ai_generated=False,
+            created_by=admin_user,
+            reviewed_by=admin_user,
+        )
+
+        recap_news = NewsArticle.objects.create(
+            title="Women's Volleyball Finals recap published after official final result",
+            slug="womens-volleyball-finals-recap",
+            summary="The final volleyball result is now reflected in the official standings and public recap flow.",
+            body_md="The Women's Volleyball Finals concluded with an official final score and corresponding medal update. The public recap summarizes the final result and its effect on the current standings.",
+            article_type="result_recap",
+            source_label="AI Recap Review Desk",
+            event=schedules["volleyball"].event,
+            department=departments["CAFA"],
+            status="published",
+            published_at=now - timedelta(hours=2),
+            ai_generated=True,
+            created_by=admin_user,
+            reviewed_by=admin_user,
+        )
+
+        AIRecap.objects.create(
+            trigger_type="event_completion",
+            scope_type="match_result",
+            scope_key="seed-match-volleyball",
+            event=schedules["volleyball"].event,
+            department=departments["CAFA"],
+            input_snapshot_json={
+                "event_title": schedules["volleyball"].event.name,
+                "scoreline": "CAFA 3 - 1 CENG",
+                "winner": departments["CAFA"].name,
+            },
+            generated_title="Women's Volleyball Finals recap ready for editorial review",
+            generated_summary="A grounded recap draft is available for the official volleyball finals result.",
+            generated_body="The Women's Volleyball Finals are finalized in the system and ready for editorial publishing after admin review.",
+            model_name="template-grounded-v1",
+            prompt_version="recap_v1",
+            citation_map_json={"sources": ["final_match_result", "official_medal_tally"]},
+            status="published",
+            generated_at=now - timedelta(hours=2, minutes=10),
+            reviewed_at=now - timedelta(hours=2, minutes=2),
+            reviewed_by=admin_user,
+            linked_news_article=recap_news,
+        )
+
+        AIRecap.objects.create(
+            trigger_type="medal_update",
+            scope_type="podium_schedule",
+            scope_key="seed-podium-swimming",
+            event=schedules["swimming"].event,
+            department=departments["CAFA"],
+            input_snapshot_json={
+                "event_title": schedules["swimming"].event.name,
+                "placements": [
+                    {"rank": 1, "department": departments["CAFA"].name, "medal": "gold"},
+                    {"rank": 2, "department": departments["CCMS"].name, "medal": "silver"},
+                    {"rank": 3, "department": departments["CENG"].name, "medal": "bronze"},
+                ],
+            },
+            generated_title="Swimming podium recap generated after final placements",
+            generated_summary="The aquatics podium draft is ready for admin approval using the finalized ranked result data.",
+            generated_body="Final podium placements for the swimming final have been recorded, and this AI recap draft is waiting at the review desk.",
+            model_name="template-grounded-v1",
+            prompt_version="recap_v1",
+            citation_map_json={"sources": ["final_podium_results", "official_medal_tally"]},
+            status="generated",
+            generated_at=now - timedelta(minutes=75),
+        )
+
+        AIRecap.objects.create(
+            trigger_type="manual",
+            scope_type="leaderboard",
+            scope_key="seed-leaderboard-summary",
+            department=departments["CCMS"],
+            input_snapshot_json={
+                "headline_scope": "top medal table movement",
+                "departments": [department.name for department in departments.values()],
+            },
+            generated_title="Leaderboard movement recap drafted for admin review",
+            generated_summary="A manual recap draft summarizes current leaderboard movement using the latest medal tally.",
+            generated_body="This draft highlights current leaderboard movement and remains in review until the admin editorial desk confirms the framing.",
+            model_name="template-grounded-v1",
+            prompt_version="recap_v1",
+            citation_map_json={"sources": ["official_medal_tally"]},
+            status="approved",
+            generated_at=now - timedelta(minutes=35),
+            reviewed_at=now - timedelta(minutes=20),
+            reviewed_by=admin_user,
+        )
