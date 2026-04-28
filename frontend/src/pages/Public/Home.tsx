@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
-import { useMedalTally } from '../../hooks/usePublicData';
-import { Trophy, ArrowRight, Activity } from 'lucide-react';
+import { useMedalTally, usePublishedNews } from '../../hooks/usePublicData';
+import { Trophy, ArrowRight, Activity, Newspaper, Sparkles } from 'lucide-react';
 
 export default function Home() {
     return (
@@ -39,6 +39,8 @@ export default function Home() {
                 
                 <Top3Widget />
             </section>
+
+            <LatestNewsSection />
         </div>
     );
 }
@@ -125,15 +127,105 @@ function Top3Widget() {
                         </div>
                         
                         <div className="mt-6 pt-4 border-t w-full">
-                            <div className="text-sm uppercase font-bold text-gray-600">Points</div>
                             <div className={`${dept.rank === 1 ? 'text-4xl' : 'text-3xl'} font-black text-charcoal`}>
-                                {dept.total_points}
+                                {dept.total_medals}
                             </div>
-                            <div className="text-xs text-gray-600">{dept.total_medals} total medals</div>
+                            <div className="text-xs font-bold uppercase text-gray-600">Total medals</div>
                         </div>
                     </div>
                 </div>
             ))}
         </div>
+    );
+}
+
+function LatestNewsSection() {
+    const { data: news, isLoading } = usePublishedNews();
+
+    if (isLoading) {
+        return (
+            <section className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
+                <div className="grid min-h-40 place-items-center">
+                    <span className="loading loading-spinner text-maroon"></span>
+                </div>
+            </section>
+        );
+    }
+
+    const latest = news?.slice(0, 3) || [];
+    const featuredRecap = news?.find(article => article.article_type === 'result_recap' || article.article_type === 'highlight');
+    const latestAnnouncement = news?.find(article => article.article_type === 'announcement');
+    const latestScheduleUpdate = news?.find(article => article.article_type === 'schedule_update');
+
+    return (
+        <section className="space-y-6">
+            <div className="flex items-center justify-between">
+                <h2 className="text-3xl font-bold text-charcoal flex items-center gap-2">
+                    <Newspaper className="w-8 h-8 text-maroon" />
+                    Latest News
+                </h2>
+                <Link to="/news" className="text-maroon font-semibold hover:underline flex items-center gap-1">
+                    Full Newsroom <ArrowRight className="w-4 h-4" />
+                </Link>
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+                <div className="rounded-2xl border border-base-300 bg-base-100 p-6 shadow-sm">
+                    {featuredRecap ? (
+                        <>
+                            <div className="mb-3 flex flex-wrap items-center gap-2">
+                                <span className="badge border-maroon/30 bg-maroon/10 capitalize text-maroon">{featuredRecap.article_type.replace('_', ' ')}</span>
+                                {featuredRecap.ai_generated && (
+                                    <span className="badge border-maroon/30 bg-maroon/10 text-maroon">
+                                        <Sparkles className="mr-1 h-3 w-3" />
+                                        AI-assisted recap
+                                    </span>
+                                )}
+                            </div>
+                            <h3 className="text-2xl font-black text-charcoal">{featuredRecap.title}</h3>
+                            <p className="mt-3 text-gray-600">{featuredRecap.summary}</p>
+                            <Link to={`/news/${featuredRecap.slug}`} className="btn mt-5 bg-maroon text-white hover:bg-maroon-dark">
+                                Read story
+                            </Link>
+                        </>
+                    ) : (
+                        <>
+                            <h3 className="text-2xl font-black text-charcoal">Published stories will appear here.</h3>
+                            <p className="mt-3 text-gray-600">Once official announcements and recaps are published, the latest feature story will show on the home page.</p>
+                        </>
+                    )}
+                </div>
+
+                <div className="space-y-4">
+                    {[latestAnnouncement, latestScheduleUpdate].filter(Boolean).map(article => (
+                        <Link
+                            key={article!.id}
+                            to={`/news/${article!.slug}`}
+                            className="block rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm transition hover:border-maroon/30"
+                        >
+                            <div className="badge border-maroon/30 bg-maroon/10 capitalize text-maroon">{article!.article_type.replace('_', ' ')}</div>
+                            <div className="mt-3 font-black text-charcoal">{article!.title}</div>
+                            <p className="mt-2 text-sm text-gray-600">{article!.summary}</p>
+                        </Link>
+                    ))}
+                </div>
+            </div>
+
+            {latest.length > 0 && (
+                <div className="grid gap-4 md:grid-cols-3">
+                    {latest.map(article => (
+                        <Link
+                            key={article.id}
+                            to={`/news/${article.slug}`}
+                            className="rounded-2xl border border-base-300 bg-base-100 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-maroon/30"
+                        >
+                            <div className="badge badge-sm border-maroon/30 bg-maroon/10 capitalize text-maroon">{article.article_type.replace('_', ' ')}</div>
+                            <h3 className="mt-3 text-lg font-black text-charcoal">{article.title}</h3>
+                            <p className="mt-2 text-sm text-gray-600 line-clamp-3">{article.summary}</p>
+                        </Link>
+                    ))}
+                </div>
+            )}
+        </section>
     );
 }
