@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAthletes, useCreateAthlete } from '../../hooks/useAdminData';
 import { useAuth } from '../../context/AuthContext';
 import { Users, Plus, CheckCircle, XCircle } from 'lucide-react';
+import DepartmentLogo from '../../components/DepartmentLogo';
 
 export default function Masterlist() {
     const { user } = useAuth();
@@ -36,14 +37,21 @@ export default function Masterlist() {
     return (
         <div className="py-8">
             <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h1 className="text-3xl font-bold text-charcoal flex items-center gap-2">
-                        <Users className="w-8 h-8 text-maroon" /> Athlete Masterlist
-                    </h1>
-                    <p className="text-gray-600">
-                        Manage {user?.department_name || 'department'} student athletes
-                        {user?.department_acronym && ` (${user.department_acronym})`}
-                    </p>
+                <div className="flex items-center gap-4">
+                    <DepartmentLogo
+                        acronym={user?.department_acronym}
+                        name={user?.department_name}
+                        className="h-14 w-14"
+                    />
+                    <div>
+                        <h1 className="text-3xl font-bold text-charcoal flex items-center gap-2">
+                            <Users className="w-8 h-8 text-maroon" /> Athlete Masterlist
+                        </h1>
+                        <p className="text-gray-600">
+                            Manage {user?.department_name || 'department'} student athletes
+                            {user?.department_acronym && ` (${user.department_acronym})`}
+                        </p>
+                    </div>
                 </div>
                 <button 
                     onClick={() => setIsFormOpen(!isFormOpen)}
