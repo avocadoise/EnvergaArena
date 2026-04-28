@@ -1,6 +1,7 @@
 import { useSchedules } from '../../hooks/usePublicData';
 import { format, parseISO } from 'date-fns';
 import { Calendar, MapPin, Users } from 'lucide-react';
+import DepartmentLogo from '../../components/DepartmentLogo';
 
 export default function Schedules() {
     const { data: schedules, isLoading, isError } = useSchedules();
@@ -77,7 +78,12 @@ export default function Schedules() {
                                         <div className="flex flex-wrap gap-1">
                                             {schedule.participants.length > 0 ? (
                                                 schedule.participants.map(p => (
-                                                    <span key={p.id} className="badge badge-sm badge-outline">
+                                                    <span key={p.id} className="inline-flex items-center gap-1 rounded-full border border-base-300 bg-white px-2 py-1 text-xs font-semibold text-charcoal">
+                                                        <DepartmentLogo
+                                                            acronym={p.department_acronym}
+                                                            name={p.department_name}
+                                                            className="h-5 w-5 border-0 shadow-none"
+                                                        />
                                                         {p.department_acronym}
                                                     </span>
                                                 ))
