@@ -7,47 +7,84 @@
 - djangorestframework-simplejwt 5.5.1
 - django-cors-headers 4.9.0
 - google-genai 1.53.0
-- SQLite (current config)
+- python-dotenv 1.2.2
+- PyJWT 2.12.1
+- psycopg2-binary 2.9.12 installed for PostgreSQL readiness
+- SQLite for the current committed development database configuration
 
 ## Project Structure
 
-- `backend/manage.py`: CLI entry point.
-- `backend/backend/settings.py`: global config, middleware, installed apps, DB, REST setup.
-- `backend/backend/urls.py`: API route registration via DRF `DefaultRouter` plus auth and Rooney endpoints.
+- `backend/manage.py`: Django CLI entry point.
+- `backend/backend/settings.py`: environment loading, installed apps, middleware, REST/JWT/CORS settings, external service settings.
+- `backend/backend/urls.py`: route registration through DRF routers plus auth, public tryout, Rooney, and admin AI/news endpoints.
 
 Domain apps:
 
-- `backend/core`: reference data + user profile and JWT customization.
-- `backend/events`: event catalog and result family taxonomy.
-- `backend/tournaments`: operations and official competition data.
-- `backend/rooney`: AI query interface and logs.
+- `backend/core`: departments, venues, venue areas, user profiles, auth cookie helpers, news.
+- `backend/events`: event categories and configurable event definitions.
+- `backend/tournaments`: schedules, athletes, public tryout verification, registrations, rosters, results, medal ledger, tally.
+- `backend/rooney`: Rooney query logs, grounding, Gemini calls, AI recap draft generation/review/publishing.
 
 ## Configuration and Bootstrapping
 
 ### Environment Loading
 
-`settings.py` loads `.env` from `BASE_DIR` using `python-dotenv`.
+`settings.py` loads environment variables from:
+
+1. `backend/.env`
+2. repo-root `.env` as a local fallback
+
+The committed template is `backend/.env.example`.
 
 ### Installed Apps
 
-- Django default apps
+- Django defaults
 - `corsheaders`
 - `rest_framework`
 - `rest_framework_simplejwt`
-- `core`, `events`, `rooney`, `tournaments`
+- `core`
+- `events`
+- `rooney`
+- `tournaments`
 
 ### Middleware
 
-`corsheaders.middleware.CorsMiddleware` appears early after session middleware to ensure CORS headers are attached.
+`corsheaders.middleware.CorsMiddleware` is included early enough to attach CORS headers for frontend dev-server requests.
 
 ### REST Defaults
 
-- Authentication: JWT auth class is globally enabled.
-- Permission default: `AllowAny` globally, then narrowed at viewset level.
+- Authentication: `JWTAuthentication`.
+- Default permission: `AllowAny`, with app/viewset-specific permissions for writes and protected data.
 
 ### Database
 
-`DATABASES['default']` is hardcoded to SQLite (`db.sqlite3`) in current repository state.
+`DATABASES['default']` currently uses SQLite at `backend/db.sqlite3`.
+
+`DATABASE_URL` is documented for future PostgreSQL deployment, but the current settings file does not parse it yet.
+
+## Auth and Session Architecture
+
+### Login
+
+`CookieTokenObtainPairView` uses `CustomTokenObtainPairSerializer`.
+
+- returns only the access token in the response body
+- removes the refresh token from JSON
+- writes the refresh token into an HttpOnly cookie configured by env variables
+
+### Refresh
+
+`CookieTokenRefreshView` reads the refresh token from the configured cookie and returns a fresh access token.
+
+If refresh rotation is enabled by env, the rotated refresh token is set back into the cookie.
+
+### Logout
+
+`LogoutView` clears the configured refresh cookie. The frontend clears the in-memory access token.
+
+### Current User
+
+`CurrentUserView` returns the same auth payload shape used in JWT claims, although the frontend primarily decodes claims from the access token.
 
 ## URL Topology
 
@@ -57,18 +94,28 @@ Defined in `backend/backend/urls.py`.
 
 - `POST /api/auth/login/`
 - `POST /api/auth/refresh/`
+- `POST /api/auth/logout/`
+- `GET /api/auth/me/`
 
-### Rooney
+### Public Tryout Verification
 
-- `POST /api/public/rooney/query/`
+- `POST /api/public/tryouts/send-otp/`
+- `POST /api/public/tryouts/verify-otp/`
+- `POST /api/public/tryouts/apply/`
+
+### Admin-Only Router Under `/api/admin/`
+
+- `news`
+- `ai-recaps`
 
 ### DRF Router Under `/api/public/`
 
-- Core: departments, venues, venue-areas
+- Core: departments, venues, venue-areas, published news
 - Events: events, event-categories
-- Tournaments: athletes, registrations, schedules, match-results, podium-results, medal-records, medal-tally
+- Tournaments: athletes, tryout-applications, registrations, schedules, match-results, podium-results, medal-records, medal-tally
+- Rooney admin monitoring: rooney-logs
 
-## App-Level Architecture
+Despite the `/public/` prefix, write permissions are enforced per viewset. Some endpoints under this router are public-read/admin-write or authenticated/scoped.
 
 ## Core App (`backend/core`)
 
@@ -77,13 +124,20 @@ Defined in `backend/backend/urls.py`.
 - `Department`
 - `Venue`
 - `VenueArea`
-- `UserProfile` (one-to-one with Django user, role + optional department)
+- `UserProfile`
+- `NewsArticle`
 
 ### API
 
-Read-only viewsets for departments, venues, and venue areas.
+- departments, venues, and venue areas are public-readable and admin-writable
+- public news endpoint returns only `status='published'`
+- admin news endpoint supports draft/review/published/archive management
 
-### JWT Custom Claims
+### Auth Helpers
+
+`core.views` owns refresh-cookie set/delete helpers and cookie-backed SimpleJWT views.
+
+### JWT Claims
 
 `CustomTokenObtainPairSerializer` embeds:
 
@@ -91,113 +145,159 @@ Read-only viewsets for departments, venues, and venue areas.
 - role
 - department id/name/acronym
 
-This enables frontend role gating and department scoping without extra user profile fetch.
-
 ## Events App (`backend/events`)
 
 ### Models
 
-- `EventCategory` (`is_medal_bearing`)
-- `Event` (`result_family`, `status`, `is_program_event`)
+- `EventCategory`
+- `Event`
+
+`Event` now includes:
+
+- `slug`
+- `division`
+- `result_family`
+- `competition_format`
+- `best_of`
+- `team_size_min`
+- `team_size_max`
+- `roster_size_max`
+- `medal_bearing`
+- `ruleset_ref`
+- `sort_order`
+- `is_program_event`
+- `status`, including `archived`
 
 ### API
 
-Read-only viewsets for event categories and events.
+Events and categories are public-readable and admin-writable through `IsAdminOrReadOnly`.
 
-Filtering excludes seeded historical category (`Previous Events (Seeded)`) from public output.
+Serializer safeguards:
+
+- auto-generates unique slugs when omitted
+- validates team size and roster size relationships
+- blocks result-family changes after schedules exist
+- blocks medal-bearing changes after result data exists
+- exposes linked schedule, registration, and result counts for admin UX
 
 ## Tournaments App (`backend/tournaments`)
 
-This is the core transactional module.
-
 ### Domain Entities
 
-- Scheduling: `EventSchedule`
-- Athlete records: `Athlete`
-- Registration workflow: `EventRegistration`, `RosterEntry`
-- Match-based outcomes: `MatchResult`, `MatchSetScore`
-- Rank-based outcomes: `PodiumResult`
-- Medal ledger: `MedalRecord`
-- Derived standing: `MedalTally`
+- `EventSchedule`
+- `Athlete`
+- `EmailVerificationCode`
+- `TryoutApplication`
+- `EventRegistration`
+- `RosterEntry`
+- `MatchResult`
+- `MatchSetScore`
+- `PodiumResult`
+- `MedalRecord`
+- `MedalTally`
 
-### Access Patterns
+### Schedule Operations
 
-- Public read access to schedules, results, medal endpoints.
-- Authenticated access required for athlete and registration operations.
-- Admin-only writes for schedules and official results through `IsAdminOrReadOnly`.
-- Department reps are row-filtered to their own department for athletes and registrations.
+`EventSchedule` includes:
 
-### Validation Strategy
+- event, venue, venue area
+- phase and round label
+- scheduled start/end
+- schedule-level status
+- official notes
 
-Serializer-level checks include:
+Validation enforces end-after-start and venue-area overlap protection for active slots.
 
-- one registration per department per schedule
-- roster athletes must belong to submitting department
-- schedule start/end consistency
-- venue-area conflict detection for active schedules
+### Public Tryout Verification
+
+Students do not receive accounts. The public flow:
+
+1. validates `@student.mseuf.edu.ph`
+2. verifies Turnstile server-side
+3. stores hashed OTP metadata
+4. sends OTP via Brevo
+5. verifies OTP within expiry/attempt limits
+6. creates a verified `TryoutApplication`
+
+### Department Representative Workflow
+
+Department reps are scoped by `UserProfile.department` and can access only their own:
+
+- tryout applications
+- participants
+- registrations
+- rosters
+
+Selected tryout applications can be converted into `Athlete` records.
 
 ### Finalization to Medal Pipeline
 
-- `MatchResultViewSet` and `PodiumResultViewSet` call service functions when `is_final=True`.
-- Service functions persist/update `MedalRecord` rows.
-- Post-save/post-delete signals recompute `MedalTally` for affected department.
+- final match results call `apply_final_match_result`
+- final podium results call `apply_final_podium_result`
+- services write `MedalRecord` rows
+- signals recompute `MedalTally`
+- final result writes also trigger AI recap draft generation
 
 ### Medal Semantics
 
-Current service default behavior:
+Official ranking is medal-priority only:
 
-- final match result assigns winner = gold and loser = silver
-- final podium result writes medal if medal is not `none`
+1. gold descending
+2. silver descending
+3. bronze descending
+4. department name as stable final sort
 
-This logic is codified in `tournaments/services.py` and can be adjusted for event-specific medal policies later.
+No points system is computed or displayed for ranking.
 
 ## Rooney App (`backend/rooney`)
 
-### Request Lifecycle
+### Rooney Query Lifecycle
 
-1. Validate incoming question length and shape.
-2. Build grounding text from live tournament data.
-3. Send grounding + question to Gemini with JSON response schema.
-4. Merge source labels from context and model output.
-5. Persist `RooneyQueryLog`.
-6. Return structured answer object.
+1. validate incoming question
+2. build grounding from public-safe official data
+3. call Gemini through configured model chain
+4. return grounded answer or refusal
+5. persist `RooneyQueryLog`
 
 ### Grounding Sources
 
-- current medal tally top ranks
-- today's schedules
-- upcoming schedules (next 3 days)
-- recent final match results
-- recent final podium results
+- medal tally and leaderboard
+- schedules
+- finalized match and podium results
+- published `NewsArticle` records only
 
-### Failure Behavior
+### AI Recap Lifecycle
 
-- missing API key returns explicit refusal response
-- API exceptions are converted to refusal payloads
-- endpoint still returns structured output shape
+AI recaps are internal/admin-only drafts.
+
+- result finalization can generate `AIRecap`
+- admin can manually generate recap from latest final result context
+- admin can edit, approve, discard, or publish
+- publishing creates or updates a public `NewsArticle` and marks the recap as published
+
+### Model Fallbacks
+
+`GEMINI_PRIMARY_MODEL` defaults to `gemini-2.5-flash-lite`. `GEMINI_BACKUP_MODELS` can list fallback models. Recap generation falls back to template-grounded copy if Gemini is unavailable.
 
 ## Cross-Cutting Backend Concerns
 
-## Security and Access Control
+### Security and Access Control
 
-- JWT is primary auth mechanism.
-- Write operations depend on view permissions and role checks.
-- No object-level permission framework beyond app logic currently.
+- JWT access token is the bearer credential for protected requests.
+- refresh token is kept in an HttpOnly cookie.
+- write operations depend on view permissions and role checks.
+- department scoping is enforced in queryset logic and serializers.
 
-## Auditability
+### Auditability
 
-- Rooney queries are persisted with grounding metadata and refusal reason.
-- Medal records act as a ledger baseline for standings.
+- Rooney query logs persist question, answer/refusal, grounding, and source labels.
+- AI recap records persist input snapshots and citation maps.
+- `NewsArticle.ai_generated` marks AI-assisted official content.
+- Medal records act as the source ledger for standings.
 
-## Data Consistency
+### Operational Utilities
 
-- uniqueness constraints enforce key domain invariants.
-- signal-driven tally update ensures standings reflect ledger mutations.
-- transaction wrappers are used around create/update methods for key write paths.
-
-## Operational Utilities
-
-`seed_data` management command recreates demo users, departments, venues, events, schedules, registrations, results, medal records, and tallies.
+`seed_data` recreates demo departments, accounts, venues, areas, categories, events, schedules, athletes, tryouts, registrations, results, medal records, news, and AI recap drafts.
 
 ## Component Diagram
 
@@ -205,11 +305,11 @@ This logic is codified in `tournaments/services.py` and can be adjusted for even
 flowchart LR
     subgraph Django API
         U[URL Router]
-        K[Core Module]
-        V[Events Module]
-        W[Tournaments Module]
-        X[Rooney Module]
-        S[Services Layer]
+        K[Core]
+        V[Events]
+        W[Tournaments]
+        X[Rooney]
+        S[Services]
         G[Signals]
     end
 
@@ -220,17 +320,20 @@ flowchart LR
 
     W --> S
     S --> G
+    X --> S
 
-    K --> DB[(SQLite)]
+    K --> DB[(SQLite dev DB)]
     V --> DB
     W --> DB
     X --> DB
-    X --> LLM[Gemini API]
+    X --> LLM[Gemini]
+    W --> CF[Turnstile]
+    W --> BR[Brevo]
 ```
 
 ## Backend Architectural Risks
 
 1. `AllowAny` as global default can hide accidental exposure of future endpoints.
-2. `CORS_ALLOW_ALL_ORIGINS=True` is unsafe for production.
-3. SQLite limits concurrency and operational resilience in production.
-4. Medal assignment rules are generic and may need event-stage awareness.
+2. SQLite limits concurrency and operational resilience in production.
+3. AI calls are synchronous and can increase request latency.
+4. Medal assignment rules are still generic and may need event-stage awareness.
