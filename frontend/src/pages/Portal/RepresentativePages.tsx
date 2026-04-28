@@ -31,6 +31,7 @@ import {
     useSchedules,
 } from '../../hooks/usePublicData';
 import type { EventSchedule } from '../../hooks/usePublicData';
+import DepartmentLogo from '../../components/DepartmentLogo';
 
 const TRYOUT_STATUSES: TryoutApplicationStatus[] = [
     'submitted',
@@ -70,10 +71,17 @@ export function DepartmentSummaryPage() {
         >
             <section className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <p className="text-xs font-bold uppercase text-maroon">{user?.department_acronym}</p>
-                        <h2 className="text-2xl font-black text-charcoal">{user?.department_name}</h2>
-                        <p className="text-sm text-gray-600">Assigned representative: {user?.username}</p>
+                    <div className="flex items-start gap-4">
+                        <DepartmentLogo
+                            acronym={user?.department_acronym}
+                            name={user?.department_name}
+                            className="h-16 w-16"
+                        />
+                        <div>
+                            <p className="text-xs font-bold uppercase text-maroon">{user?.department_acronym}</p>
+                            <h2 className="text-2xl font-black text-charcoal">{user?.department_name}</h2>
+                            <p className="text-sm text-gray-600">Assigned representative: {user?.username}</p>
+                        </div>
                     </div>
                     <div className="rounded-md bg-maroon px-4 py-3 text-white">
                         <p className="text-xs font-bold uppercase text-white/80">Official Rank</p>
@@ -615,9 +623,16 @@ export function DepartmentMedalsPage() {
                 <>
                     <section className="rounded-lg border border-base-300 bg-base-100 p-5 shadow-sm">
                         <div className="flex flex-wrap items-center justify-between gap-4">
-                            <div>
-                                <p className="text-xs font-bold uppercase text-maroon">Current Official Rank</p>
-                                <p className="text-5xl font-black text-charcoal">{rank === undefined || rank < 0 ? '-' : rank + 1}</p>
+                            <div className="flex items-center gap-4">
+                                <DepartmentLogo
+                                    acronym={row?.department_acronym}
+                                    name={row?.department_name}
+                                    className="h-20 w-20"
+                                />
+                                <div>
+                                    <p className="text-xs font-bold uppercase text-maroon">Current Official Rank</p>
+                                    <p className="text-5xl font-black text-charcoal">{rank === undefined || rank < 0 ? '-' : rank + 1}</p>
+                                </div>
                             </div>
                             <div className="grid grid-cols-4 gap-2">
                                 <MedalBox label="Gold" value={row?.gold || 0} className="bg-yellow-100 text-yellow-800" />
@@ -748,7 +763,14 @@ function ScheduleGrid({ schedules, isLoading }: { schedules: EventSchedule[]; is
                     ]} />
                     <div className="mt-3 flex flex-wrap gap-1">
                         {schedule.participants.map(participant => (
-                            <span key={participant.id} className="badge badge-sm badge-outline">{participant.department_acronym}</span>
+                            <span key={participant.id} className="inline-flex items-center gap-1 rounded-full border border-base-300 bg-white px-2 py-1 text-xs font-semibold text-charcoal">
+                                <DepartmentLogo
+                                    acronym={participant.department_acronym}
+                                    name={participant.department_name}
+                                    className="h-5 w-5 border-0 shadow-none"
+                                />
+                                {participant.department_acronym}
+                            </span>
                         ))}
                     </div>
                 </section>
