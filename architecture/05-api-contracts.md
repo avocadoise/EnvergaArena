@@ -7,6 +7,127 @@
 - Protected requests use `Authorization: Bearer <access_token>`
 - Browser requests use `withCredentials: true` so the HttpOnly refresh cookie can be sent to auth refresh/logout endpoints
 
+## Implementation Source of Truth
+
+Backend API routes are registered in `backend/backend/urls.py`.
+
+The file uses two DRF routers:
+
+- `router`: included under `/api/public/`
+- `admin_router`: included under `/api/admin/`
+
+It also defines explicit `path()` routes for authentication, public tryout OTP/application flow, and Rooney public query.
+
+```python
+router = DefaultRouter()
+admin_router = DefaultRouter()
+
+router.register(r'departments', DepartmentViewSet)
+router.register(r'venues', VenueViewSet)
+router.register(r'venue-areas', VenueAreaViewSet)
+router.register(r'news', PublicNewsArticleViewSet, basename='publicnews')
+router.register(r'events', EventViewSet)
+router.register(r'event-categories', EventCategoryViewSet)
+router.register(r'athletes', AthleteViewSet, basename='athlete')
+router.register(r'tryout-applications', TryoutApplicationViewSet, basename='tryoutapplication')
+router.register(r'registrations', EventRegistrationViewSet, basename='eventregistration')
+router.register(r'schedules', EventScheduleViewSet)
+router.register(r'match-results', MatchResultViewSet)
+router.register(r'podium-results', PodiumResultViewSet)
+router.register(r'medal-records', MedalRecordViewSet)
+router.register(r'medal-tally', MedalTallyViewSet)
+router.register(r'rooney-logs', RooneyQueryLogViewSet, basename='rooneylog')
+
+admin_router.register(r'news', AdminNewsArticleViewSet, basename='adminnews')
+admin_router.register(r'ai-recaps', AIRecapViewSet, basename='airecap')
+```
+
+Explicit routes:
+
+```python
+path('api/auth/login/', CookieTokenObtainPairView.as_view(), name='token_obtain_pair')
+path('api/auth/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh')
+path('api/auth/logout/', LogoutView.as_view(), name='token_logout')
+path('api/auth/me/', CurrentUserView.as_view(), name='current_user')
+path('api/public/rooney/query/', RooneyQueryView.as_view(), name='rooney_query')
+path('api/public/tryouts/send-otp/', TryoutSendOtpView.as_view(), name='tryout_send_otp')
+path('api/public/tryouts/verify-otp/', TryoutVerifyOtpView.as_view(), name='tryout_verify_otp')
+path('api/public/tryouts/apply/', TryoutApplyView.as_view(), name='tryout_apply')
+```
+
+## Backend Route Implementation Map
+
+This section maps public API paths to the actual backend class or function handling the request.
+
+### Explicit Auth Routes
+
+| API Path | Method | Backend Code | Serializer / Helper | Permission | What It Does |
+| --- | --- | --- | --- | --- | --- |
+| `/api/auth/login/` | POST | `backend/core/views.py::CookieTokenObtainPairView` | `CustomTokenObtainPairSerializer`, `set_refresh_cookie()` | Public | Validates credentials through SimpleJWT, returns access JWT in JSON, stores refresh JWT in HttpOnly cookie |
+| `/api/auth/refresh/` | POST | `backend/core/views.py::CookieTokenRefreshView` | SimpleJWT refresh serializer, `set_refresh_cookie()` when rotation returns a new refresh token | Refresh cookie required | Reads refresh JWT from configured cookie and returns a fresh access JWT |
+| `/api/auth/logout/` | POST | `backend/core/views.py::LogoutView` | `clear_refresh_cookie()` | Public | Deletes the refresh cookie; frontend clears in-memory access token |
+| `/api/auth/me/` | GET | `backend/core/views.py::CurrentUserView` | `get_user_auth_payload()` | `IsAuthenticated` | Returns role, username, and department payload for the current access token |
+
+Auth support code:
+
+- `backend/core/serializers.py::get_user_auth_payload()` builds the auth payload.
+- `backend/core/serializers.py::CustomTokenObtainPairSerializer` adds role and department claims to JWTs.
+- `backend/backend/settings.py::SIMPLE_JWT` defines signing key, algorithm, and lifetimes from environment variables.
+
+### Explicit Public Tryout Routes
+
+| API Path | Method | Backend Code | Serializer / Helper | Permission | What It Does |
+| --- | --- | --- | --- | --- | --- |
+| `/api/public/tryouts/send-otp/` | POST | `backend/tournaments/views.py::TryoutSendOtpView` | `TryoutSendOtpSerializer`, `verify_turnstile_token()`, `create_email_verification_code()`, `send_tryout_otp_email()` | Public | Validates school email, duplicate application state, Turnstile, and rate limits; stores hashed OTP and sends Brevo email |
+| `/api/public/tryouts/verify-otp/` | POST | `backend/tournaments/views.py::TryoutVerifyOtpView` | `TryoutVerifyOtpSerializer`, `verify_email_code()` | Public | Validates OTP, expiry, attempt limits, and marks verification code as used |
+| `/api/public/tryouts/apply/` | POST | `backend/tournaments/views.py::TryoutApplyView` | `TryoutApplySerializer`, `get_recent_verified_code()` | Public | Creates verified `TryoutApplication` with status `submitted` after OTP verification |
+
+Tryout support code:
+
+- `backend/tournaments/tryout_services.py::validate_school_email()` enforces `@student.mseuf.edu.ph`.
+- `backend/tournaments/tryout_services.py::enforce_rate_limit()` protects send, verify, and apply actions.
+- `backend/tournaments/tryout_services.py::verify_turnstile_token()` performs server-side Cloudflare Siteverify.
+- `backend/tournaments/tryout_services.py::send_tryout_otp_email()` sends OTP through Brevo.
+
+### Explicit Rooney Route
+
+| API Path | Method | Backend Code | Serializer / Helper | Permission | What It Does |
+| --- | --- | --- | --- | --- | --- |
+| `/api/public/rooney/query/` | POST | `backend/rooney/views.py::RooneyQueryView` | `RooneyQuerySerializer`, `build_grounding_context()`, `query_rooney()` | Public | Validates a question, builds official grounding context, calls Gemini model chain, logs the query, and returns grounded answer/refusal |
+
+### `/api/public/` DRF Router Routes
+
+The `/api/public/` prefix contains a mix of anonymous read endpoints, authenticated/scoped workflow endpoints, and admin-write endpoints. The route prefix is historical; permissions still control the real access rules.
+
+| Router Path | Backend Code | Serializer | Permission | What It Does |
+| --- | --- | --- | --- | --- |
+| `/api/public/departments/` | `backend/core/views.py::DepartmentViewSet` | `DepartmentSerializer` | `IsAdminOrReadOnly` | Lists departments publicly; admin can create/update/delete department rows |
+| `/api/public/venues/` | `backend/core/views.py::VenueViewSet` | `VenueSerializer` | `IsAdminOrReadOnly` | Lists venues and nested areas; admin can manage venue records |
+| `/api/public/venue-areas/` | `backend/core/views.py::VenueAreaViewSet` | `VenueAreaSerializer` | `IsAdminOrReadOnly` | Lists venue areas; admin can manage areas |
+| `/api/public/news/` | `backend/core/views.py::PublicNewsArticleViewSet` | `NewsArticlePublicSerializer` | `AllowAny` | Read-only list/detail of `NewsArticle` rows with `status='published'`; lookup by slug |
+| `/api/public/events/` | `backend/events/views.py::EventViewSet` | `EventSerializer` | `IsAdminOrReadOnly` | Public event catalog; admin can create/edit/archive event definitions |
+| `/api/public/event-categories/` | `backend/events/views.py::EventCategoryViewSet` | `EventCategorySerializer` | `IsAdminOrReadOnly` | Public event category list; admin can manage categories |
+| `/api/public/athletes/` | `backend/tournaments/views.py::AthleteViewSet` | `AthleteSerializer` | `IsAuthenticated` | Admin sees all athletes; department reps see only athletes from their `UserProfile.department` |
+| `/api/public/tryout-applications/` | `backend/tournaments/views.py::TryoutApplicationViewSet` | `TryoutApplicationSerializer` | `TryoutApplicationPermission` | Admin sees verified applications; department reps see verified applications for their department; includes `convert` action |
+| `/api/public/registrations/` | `backend/tournaments/views.py::EventRegistrationViewSet` | `EventRegistrationSerializer` | `IsAuthenticated` | Admin sees all event registrations; department reps see and submit only their department registrations |
+| `/api/public/schedules/` | `backend/tournaments/views.py::EventScheduleViewSet` | `EventScheduleSerializer` | `IsAdminOrReadOnly` | Public schedule list/detail; admin can create/edit/delete schedule slots and venue assignments |
+| `/api/public/match-results/` | `backend/tournaments/views.py::MatchResultViewSet` | `MatchResultSerializer` for reads, `MatchResultWriteSerializer` for writes | `IsAdminOrReadOnly` | Public match results; admin can create/update final match results; final results update medals and generate AI recap draft |
+| `/api/public/podium-results/` | `backend/tournaments/views.py::PodiumResultViewSet` | `PodiumResultSerializer` | `IsAdminOrReadOnly` | Public rank-based/podium results; admin can finalize podium rows; final rows update medal ledger and generate recap draft |
+| `/api/public/medal-records/` | `backend/tournaments/views.py::MedalRecordViewSet` | `MedalRecordSerializer` | `IsAdminOrReadOnly` | Public medal ledger list; admin can correct/delete medal records |
+| `/api/public/medal-tally/` | `backend/tournaments/views.py::MedalTallyViewSet` | `MedalTallySerializer` | `AllowAny` | Read-only computed standings ordered by gold, silver, bronze, then department name |
+| `/api/public/rooney-logs/` | `backend/rooney/views.py::RooneyQueryLogViewSet` | `RooneyQueryLogSerializer` | `IsAdminUser` | Admin-only monitoring table for public Rooney queries |
+
+### `/api/admin/` DRF Router Routes
+
+| Router Path | Backend Code | Serializer | Permission | What It Does |
+| --- | --- | --- | --- | --- |
+| `/api/admin/news/` | `backend/core/views.py::AdminNewsArticleViewSet` | `NewsArticleAdminSerializer` | `IsAdminUser` | Admin official content management for draft, review, published, and archived news |
+| `/api/admin/ai-recaps/` | `backend/rooney/views.py::AIRecapViewSet` | `AIRecapSerializer` | `IsAdminUser` | Admin AI recap review desk: list, edit, approve, discard, and publish recap drafts |
+| `/api/admin/ai-recaps/generate/` | `AIRecapViewSet.generate()` | `AIRecapGenerateSerializer` | `IsAdminUser` | Manually generates a recap draft from a finalized match result or schedule context |
+| `/api/admin/ai-recaps/{id}/approve/` | `AIRecapViewSet.approve()` | `AIRecapSerializer` | `IsAdminUser` | Marks a generated recap as approved and records reviewer metadata |
+| `/api/admin/ai-recaps/{id}/discard/` | `AIRecapViewSet.discard()` | `AIRecapSerializer` | `IsAdminUser` | Marks a recap as discarded and records reviewer metadata |
+| `/api/admin/ai-recaps/{id}/publish/` | `AIRecapViewSet.publish()` | `publish_recap_to_news()` | `IsAdminUser` | Converts an approved/reviewed recap into official public `NewsArticle` content |
+
 ## Authentication Endpoints
 
 | Method | Path | Auth Required | Description |

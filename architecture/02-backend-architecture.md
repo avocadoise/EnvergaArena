@@ -90,30 +90,32 @@ If refresh rotation is enabled by env, the rotated refresh token is set back int
 
 Defined in `backend/backend/urls.py`.
 
+Detailed route-to-code mappings are maintained in `architecture/05-api-contracts.md`.
+
 ### Auth
 
-- `POST /api/auth/login/`
-- `POST /api/auth/refresh/`
-- `POST /api/auth/logout/`
-- `GET /api/auth/me/`
+- `POST /api/auth/login/`: `core.views.CookieTokenObtainPairView`
+- `POST /api/auth/refresh/`: `core.views.CookieTokenRefreshView`
+- `POST /api/auth/logout/`: `core.views.LogoutView`
+- `GET /api/auth/me/`: `core.views.CurrentUserView`
 
 ### Public Tryout Verification
 
-- `POST /api/public/tryouts/send-otp/`
-- `POST /api/public/tryouts/verify-otp/`
-- `POST /api/public/tryouts/apply/`
+- `POST /api/public/tryouts/send-otp/`: `tournaments.views.TryoutSendOtpView`
+- `POST /api/public/tryouts/verify-otp/`: `tournaments.views.TryoutVerifyOtpView`
+- `POST /api/public/tryouts/apply/`: `tournaments.views.TryoutApplyView`
 
 ### Admin-Only Router Under `/api/admin/`
 
-- `news`
-- `ai-recaps`
+- `news`: `core.views.AdminNewsArticleViewSet`
+- `ai-recaps`: `rooney.views.AIRecapViewSet`
 
 ### DRF Router Under `/api/public/`
 
-- Core: departments, venues, venue-areas, published news
-- Events: events, event-categories
-- Tournaments: athletes, tryout-applications, registrations, schedules, match-results, podium-results, medal-records, medal-tally
-- Rooney admin monitoring: rooney-logs
+- Core: `DepartmentViewSet`, `VenueViewSet`, `VenueAreaViewSet`, `PublicNewsArticleViewSet`
+- Events: `EventViewSet`, `EventCategoryViewSet`
+- Tournaments: `AthleteViewSet`, `TryoutApplicationViewSet`, `EventRegistrationViewSet`, `EventScheduleViewSet`, `MatchResultViewSet`, `PodiumResultViewSet`, `MedalRecordViewSet`, `MedalTallyViewSet`
+- Rooney admin monitoring: `RooneyQueryLogViewSet`
 
 Despite the `/public/` prefix, write permissions are enforced per viewset. Some endpoints under this router are public-read/admin-write or authenticated/scoped.
 
